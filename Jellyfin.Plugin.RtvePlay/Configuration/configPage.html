@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>RTVE Play</title>
+</head>
+<body>
+    <div id="RtvePlayConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Programas de RTVE Play</h2>
+                    <p class="fieldDescription">
+                        Añade los programas que quieras replicar en la biblioteca. Acepta el id numérico
+                        (<code>111570</code>), el slug de la página del programa (<code>saber-vivir</code>)
+                        o la URL completa (<code>https://www.rtve.es/play/videos/saber-vivir/</code>).
+                    </p>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RtveProgramInput">Id, slug o URL del programa</label>
+                        <input id="RtveProgramInput" type="text" is="emby-input" placeholder="saber-vivir" />
+                    </div>
+                    <div>
+                        <button id="RtveAddProgram" is="emby-button" type="button" class="raised button-submit block">
+                            <span>Añadir programa</span>
+                        </button>
+                        <button id="RtveSearchPrograms" is="emby-button" type="button" class="raised block">
+                            <span>Buscar por título</span>
+                        </button>
+                    </div>
+                    <div id="RtvePrograms"></div>
+                    <div id="RtveSearchResults"></div>
+                </div>
+
+                <form id="RtvePlayConfigForm">
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Biblioteca</h2>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="RtveDestinationPath">Carpeta de destino</label>
+                            <input id="RtveDestinationPath" type="text" is="emby-input" placeholder="/media/series/RTVE Play" />
+                            <div class="fieldDescription">
+                                Ruta absoluta, tal y como la ve el servidor Jellyfin, donde se escribirán las
+                                carpetas de cada programa. Lo recomendable es una carpeta propia (por ejemplo
+                                <code>/media/rtve-play</code>) añadida como biblioteca de tipo «Programas de TV».
+                            </div>
+                        </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="RtveRefreshInterval">Intervalo de actualización (horas)</label>
+                            <input id="RtveRefreshInterval" type="number" is="emby-input" min="1" max="168" step="1" />
+                        </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="RtveMaxItems">Máximo de vídeos por programa (0 = sin límite)</label>
+                            <input id="RtveMaxItems" type="number" is="emby-input" min="0" step="1" />
+                        </div>
+                        <div class="selectContainer">
+                            <label class="selectLabel" for="RtveSubtitleLanguage">Idioma de los subtítulos</label>
+                            <select id="RtveSubtitleLanguage" is="emby-select" class="emby-select-withcolor emby-select">
+                                <option value="none">No descargar subtítulos</option>
+                                <option value="es">Español (es)</option>
+                                <option value="en">Inglés (en)</option>
+                                <option value="ca">Catalán (ca)</option>
+                                <option value="gl">Gallego (gl)</option>
+                                <option value="eu">Euskera (eu)</option>
+                            </select>
+                            <div class="fieldDescription">
+                                Por defecto no se descargan. RTVE publica los WebVTT en es, en, ca, gl y eu;
+                                elige el idioma que quieras guardar junto a cada episodio (<code>.es.srt</code>,
+                                <code>.en.srt</code>…).
+                            </div>
+                        </div>
+                    </div>
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Opciones</h2>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtvePreferMp4" type="checkbox" is="emby-checkbox" />
+                                <span>Preferir MP4 progresivo</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Cuando el vídeo ofrece MP4 directo se usa esa URL (permite avanzar y retroceder);
+                                si no, se usa HLS.
+                            </div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveFilterDrm" type="checkbox" is="emby-checkbox" />
+                                <span>Omitir vídeos protegidos con DRM</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Recomendado: los vídeos con DRM no se pueden reproducir desde un archivo .strm.
+                            </div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveWriteNfo" type="checkbox" is="emby-checkbox" />
+                                <span>Escribir metadatos .nfo</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Título, sinopsis, fecha de emisión, duración y carátula de cada episodio.
+                            </div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveWriteSubtitles" type="checkbox" is="emby-checkbox" />
+                                <span>Descargar subtítulos</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Descarga los WebVTT de RTVE y los convierte a SRT junto al archivo .strm.
+                            </div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveDeleteObsolete" type="checkbox" is="emby-checkbox" />
+                                <span>Borrar episodios que ya no están en el catálogo</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Elimina los archivos .strm/.nfo/.srt de la carpeta del programa que ya no se
+                                generan. Úsalo solo si esa carpeta es exclusiva del plugin.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block">
+                            <span>Guardar</span>
+                        </button>
+                    </div>
+                </form>
+
+                <div class="verticalSection">
+                    <button id="RtveRunNow" is="emby-button" type="button" class="raised block">
+                        <span>Ejecutar ahora</span>
+                    </button>
+                    <div id="RtveStatus" class="fieldDescription"></div>
+                </div>
+            </div>
+        </div>
+        <script type="text/javascript">
+            var RtvePlayConfig = {
+                pluginId: '3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913',
+                taskKey: 'RtvePlayRefresh',
+                programs: []
+            };
+
+            function rtveStatus(message) {
+                document.querySelector('#RtveStatus').textContent = message || '';
+            }
+
+            function rtveUrl(method, query) {
+                return ApiClient.getUrl('RtvePlay/' + method, query);
+            }
+
+            function rtveInt(value, fallback) {
+                var parsed = parseInt(value, 10);
+                return isNaN(parsed) ? fallback : parsed;
+            }
+
+            // The server may serialize the DTOs as PascalCase or camelCase depending on the
+            // serializer profile negotiated by the web client, so read both spellings.
+            function rtveField(item, name) {
+                if (!item) {
+                    return undefined;
+                }
+                if (item[name] !== undefined) {
+                    return item[name];
+                }
+                return item[name.charAt(0).toUpperCase() + name.slice(1)];
+            }
+
+            function rtveLoad() {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(RtvePlayConfig.pluginId).then(function (config) {
+                    RtvePlayConfig.programs = (rtveField(config, 'programs') || []).map(function (program) {
+                        return {
+                            Id: rtveField(program, 'id') || '',
+                            Title: rtveField(program, 'title') || ''
+                        };
+                    });
+
+                    document.querySelector('#RtveDestinationPath').value = rtveField(config, 'destinationPath') || '';
+                    document.querySelector('#RtveRefreshInterval').value = rtveField(config, 'refreshIntervalHours') || 12;
+                    document.querySelector('#RtveMaxItems').value = rtveField(config, 'maxItemsPerProgram') || 0;
+                    document.querySelector('#RtveSubtitleLanguage').value = rtveField(config, 'subtitleLanguage') || 'none';
+                    document.querySelector('#RtvePreferMp4').checked = rtveField(config, 'preferMp4') !== false;
+                    document.querySelector('#RtveFilterDrm').checked = rtveField(config, 'filterDrm') !== false;
+                    document.querySelector('#RtveWriteNfo').checked = rtveField(config, 'writeNfo') !== false;
+                    document.querySelector('#RtveWriteSubtitles').checked = rtveField(config, 'writeSubtitles') !== false;
+                    document.querySelector('#RtveDeleteObsolete').checked = rtveField(config, 'deleteObsolete') === true;
+
+                    rtveRenderPrograms();
+                    rtveRenderSearchResults([]);
+                    rtveStatus('');
+                    Dashboard.hideLoadingMsg();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    rtveStatus('No se pudo cargar la configuración del plugin.');
+                });
+            }
+
+            function rtveSave() {
+                return ApiClient.getPluginConfiguration(RtvePlayConfig.pluginId).then(function (config) {
+                    config.Programs = RtvePlayConfig.programs.map(function (program) {
+                        return { Id: program.Id, Title: program.Title };
+                    });
+                    config.DestinationPath = document.querySelector('#RtveDestinationPath').value.trim();
+                    config.RefreshIntervalHours = rtveInt(document.querySelector('#RtveRefreshInterval').value, 12);
+                    config.MaxItemsPerProgram = rtveInt(document.querySelector('#RtveMaxItems').value, 0);
+                    config.SubtitleLanguage = document.querySelector('#RtveSubtitleLanguage').value;
+                    config.PreferMp4 = document.querySelector('#RtvePreferMp4').checked;
+                    config.FilterDrm = document.querySelector('#RtveFilterDrm').checked;
+                    config.WriteNfo = document.querySelector('#RtveWriteNfo').checked;
+                    config.WriteSubtitles = document.querySelector('#RtveWriteSubtitles').checked;
+                    config.DeleteObsolete = document.querySelector('#RtveDeleteObsolete').checked;
+
+                    return ApiClient.updatePluginConfiguration(RtvePlayConfig.pluginId, config).then(function (result) {
+                        // The scheduled task reads its triggers from the saved configuration.
+                        return ApiClient.ajax({ type: 'POST', url: rtveUrl('Triggers') }).then(
+                            function () { return result; },
+                            function () { return result; });
+                    });
+                });
+            }
+            function rtveElement(tag, className, text) {
+                var element = document.createElement(tag);
+                if (className) {
+                    element.className = className;
+                }
+                if (text !== undefined && text !== null) {
+                    element.textContent = text;
+                }
+                return element;
+            }
+
+            function rtveRow(title, subtitle, actionLabel, actionClass, onAction) {
+                var row = rtveElement('div', 'listItem listItem-border');
+                var body = rtveElement('div', 'listItemBody');
+                body.appendChild(rtveElement('h3', 'listItemBodyText', title));
+                if (subtitle) {
+                    body.appendChild(rtveElement('div', 'secondary listItemBodyText', subtitle));
+                }
+                row.appendChild(body);
+
+                if (actionLabel) {
+                    var button = rtveElement('button', 'emby-button raised ' + actionClass, actionLabel);
+                    button.type = 'button';
+                    button.addEventListener('click', onAction);
+                    row.appendChild(button);
+                }
+                return row;
+            }
+
+            function rtveRenderPrograms() {
+                var container = document.querySelector('#RtvePrograms');
+                container.innerHTML = '';
+                if (RtvePlayConfig.programs.length === 0) {
+                    container.appendChild(rtveElement('p', 'fieldDescription', 'Todavía no has añadido ningún programa.'));
+                    return;
+                }
+
+                RtvePlayConfig.programs.forEach(function (program) {
+                    container.appendChild(rtveRow(
+                        program.Title || program.Id,
+                        'id ' + program.Id,
+                        'Quitar',
+                        'button-delete',
+                        function () {
+                            RtvePlayConfig.programs = RtvePlayConfig.programs.filter(function (item) {
+                                return item.Id !== program.Id;
+                            });
+                            rtveRenderPrograms();
+                            rtveStatus('Programa quitado de la lista. Recuerda guardar los cambios.');
+                        }));
+                });
+            }
+
+            function rtveRenderSearchResults(results) {
+                var container = document.querySelector('#RtveSearchResults');
+                container.innerHTML = '';
+                if (!results || results.length === 0) {
+                    return;
+                }
+
+                container.appendChild(rtveElement('h3', 'sectionTitle', 'Resultados de la búsqueda'));
+                results.forEach(function (result) {
+                    var resultId = rtveField(result, 'id');
+                    container.appendChild(rtveRow(
+                        rtveField(result, 'title') || resultId,
+                        rtveField(result, 'url') || ('id ' + resultId),
+                        'Añadir',
+                        'button-submit',
+                        function () { rtveAddResolved(result, true); }));
+                });
+            }
+
+            function rtveAddResolved(program, fromSearch) {
+                var programId = rtveField(program, 'id');
+                var programTitle = rtveField(program, 'title') || programId;
+                var exists = RtvePlayConfig.programs.some(function (item) {
+                    return item.Id === programId;
+                });
+
+                if (exists) {
+                    rtveStatus('Ese programa ya está en la lista.');
+                } else {
+                    RtvePlayConfig.programs.push({ Id: programId, Title: programTitle });
+                    rtveRenderPrograms();
+                    rtveStatus('Añadido «' + programTitle + '». Recuerda guardar los cambios.');
+                }
+
+                if (fromSearch) {
+                    document.querySelector('#RtveSearchResults').innerHTML = '';
+                }
+            }
+            function rtveResolve(value) {
+                if (!value) {
+                    rtveStatus('Escribe el id, el slug o la URL de un programa.');
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                ApiClient.getJSON(rtveUrl('Programs/Resolve', { value: value })).then(function (program) {
+                    Dashboard.hideLoadingMsg();
+                    if (!program || !rtveField(program, 'id')) {
+                        rtveStatus('RTVE no ha devuelto ningún programa para «' + value + '».');
+                        return;
+                    }
+                    rtveAddResolved(program, false);
+                    document.querySelector('#RtveProgramInput').value = '';
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    rtveStatus('No se pudo resolver «' + value + '». Comprueba el id, el slug o la URL.');
+                });
+            }
+
+            function rtveSearch() {
+                var query = document.querySelector('#RtveProgramInput').value.trim();
+                if (!query) {
+                    rtveStatus('Escribe un título para buscar.');
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                ApiClient.getJSON(rtveUrl('Programs/Search', { query: query, limit: 10 })).then(function (results) {
+                    Dashboard.hideLoadingMsg();
+                    if (!results || results.length === 0) {
+                        rtveStatus('Sin resultados para «' + query + '».');
+                        return;
+                    }
+                    rtveRenderSearchResults(results);
+                    rtveStatus('');
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    rtveStatus('La búsqueda ha fallado. Inténtalo de nuevo más tarde.');
+                });
+            }
+
+            function rtveRunNow() {
+                Dashboard.showLoadingMsg();
+                rtveSave().then(function () {
+                    return ApiClient.ajax({
+                        type: 'POST',
+                        url: rtveUrl('Refresh')
+                    });
+                }).then(function () {
+                    Dashboard.hideLoadingMsg();
+                    rtveStatus('Tarea iniciada. Sigue el progreso en Panel → Tareas programadas → «RTVE Play».');
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    rtveStatus('No se pudo iniciar la tarea. Guarda la configuración e inténtalo de nuevo.');
+                });
+            }
+            function rtveBind() {
+                if (RtvePlayConfig.bound) {
+                    return;
+                }
+                RtvePlayConfig.bound = true;
+
+                document.querySelector('#RtveAddProgram').addEventListener('click', function () {
+                    rtveResolve(document.querySelector('#RtveProgramInput').value.trim());
+                });
+
+                document.querySelector('#RtveSearchPrograms').addEventListener('click', rtveSearch);
+                document.querySelector('#RtveRunNow').addEventListener('click', rtveRunNow);
+
+                document.querySelector('#RtveProgramInput').addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        rtveResolve(this.value.trim());
+                    }
+                });
+
+                document.querySelector('#RtvePlayConfigForm').addEventListener('submit', function (event) {
+                    event.preventDefault();
+                    Dashboard.showLoadingMsg();
+                    rtveSave().then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        rtveStatus('Configuración guardada. ' + RtvePlayConfig.programs.length + ' programa(s) en la lista.');
+                    }, function () {
+                        Dashboard.hideLoadingMsg();
+                        rtveStatus('No se pudo guardar la configuración.');
+                    });
+                    return false;
+                });
+            }
+
+            function rtveInit() {
+                rtveBind();
+                rtveLoad();
+            }
+
+            document.querySelector('#RtvePlayConfigPage').addEventListener('pageshow', rtveInit);
+
+            // Fallback for the case where the page is loaded directly instead of through the view manager.
+            setTimeout(function () {
+                var page = document.querySelector('#RtvePlayConfigPage');
+                if (page && !RtvePlayConfig.bound && page.offsetParent !== null) {
+                    rtveInit();
+                }
+            }, 100);
+
+        </script>
+
+    </div>
+</body>
+</html>

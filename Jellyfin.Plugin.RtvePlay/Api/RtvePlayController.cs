@@ -1,0 +1,122 @@
+using Jellyfin.Plugin.RtvePlay.Configuration;
+using Jellyfin.Plugin.RtvePlay.Rtve;
+using Jellyfin.Plugin.RtvePlay.Tasks;
+using MediaBrowser.Model.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+
+namespace Jellyfin.Plugin.RtvePlay.Api;
+
+/// <summary>
+/// Endpoints used by the configuration page.
+/// </summary>
+[ApiController]
+[Authorize]
+[Route("RtvePlay")]
+public sealed class RtvePlayController : ControllerBase
+{
+    private readonly RtveClient _client;
+    private readonly ITaskManager _taskManager;
+    private readonly ILogger<RtvePlayController> _logger;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RtvePlayController"/> class.
+    /// </summary>
+    /// <param name="client">RTVE API client.</param>
+    /// <param name="taskManager">Task manager.</param>
+    /// <param name="logger">Logger.</param>
+    public RtvePlayController(RtveClient client, ITaskManager taskManager, ILogger<RtvePlayController> logger)
+    {
+        _client = client;
+        _taskManager = taskManager;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Searches the RTVE program catalog by title.
+    /// </summary>
+    /// <param name="query">Text to search.</param>
+    /// <param name="limit">Maximum number of results (1-50).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The matching programs.</returns>
+    [HttpGet("Programs/Search")]
+    public async Task<ActionResult<IReadOnlyList<RtveProgramSummary>>> SearchAsync(
+        [FromQuery] string? query,
+        [FromQuery] int? limit,
+        CancellationToken cancellationToken)
+    {
+        var results = await _client
+            .SearchProgramsAsync(query ?? string.Empty, Math.Clamp(limit ?? 20, 1, 50), cancellationToken)
+            .ConfigureAwait(false);
+
+        return Ok(results);
+    }
+
+    /// <summary>
+    /// Resolves a program from an id, a slug or a program URL.
+    /// </summary>
+    /// <param name="value">Program id, slug or URL.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The resolved program.</returns>
+    [HttpGet("Programs/Resolve")]
+    public async Task<ActionResult<RtveProgramSummary>> ResolveAsync(
+        [FromQuery] string? value,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return BadRequest("Indica el id, el slug o la URL del programa.");
+        }
+
+        try
+        {
+            var id = await _client.ResolveProgramIdAsync(value, cancellationToken).ConfigureAwait(false);
+            var program = await _client.GetProgramAsync(id, cancellationToken).ConfigureAwait(false);
+            var title = program?.Title ?? value.Trim();
+
+            return Ok(new RtveProgramSummary(id, title, program?.HtmlUrl, program?.PosterImage));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            _logger.LogWarning(ex, "RTVE Play: no se pudo resolver el programa {Value}", value);
+            return BadRequest(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Applies the configured refresh interval to the scheduled task.
+    /// </summary>
+    /// <returns>No content.</returns>
+    [HttpPost("Triggers")]
+    public ActionResult ApplyTriggers()
+    {
+        var configuration = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        RtveTriggerScheduler.Apply(_taskManager, configuration, _logger);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Starts the refresh task immediately.
+    /// </summary>
+    /// <remarks>
+    /// The stock <c>ScheduledTasks/Running/{id}</c> endpoint looks the task up by its GUID, not by
+    /// its key, so the configuration page cannot use it directly without a round trip.
+    /// </remarks>
+    /// <returns>No content when the task was queued; 404 when it is not registered yet.</returns>
+    [HttpPost("Refresh")]
+    public ActionResult RunNow()
+    {
+        var worker = _taskManager.ScheduledTasks
+            .FirstOrDefault(task => task.ScheduledTask is RtveRefreshTask);
+
+        if (worker is null)
+        {
+            _logger.LogWarning("RTVE Play: la tarea programada no está registrada; no se puede ejecutar");
+            return NotFound("La tarea programada no está registrada todavía. Reinicia Jellyfin.");
+        }
+
+        _ = _taskManager.Execute(worker, new TaskOptions());
+        return NoContent();
+    }
+}

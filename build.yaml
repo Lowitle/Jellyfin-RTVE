@@ -1,0 +1,22 @@
+---
+name: "RTVE Play"
+guid: "3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913"
+version: "1.0.0.0"
+targetAbi: "10.11.0.0"
+framework: "net9.0"
+overview: "Crea una biblioteca de series con el catálogo a la carta de RTVE Play (.strm + metadatos + subtítulos)."
+description: >
+  Resuelve el catálogo público de RTVE Play (programas, temporadas y episodios) y lo replica
+  como biblioteca de series de Jellyfin mediante archivos .strm, con metadatos .nfo, carátulas
+  y subtítulos SRT convertidos desde los WebVTT originales. La actualización se ejecuta con una
+  tarea programada y desde la propia página de configuración del plugin.
+category: "General"
+# Repositorio propio del plugin (repositorio de plugins autoalojado). Este campo solo habría que
+# cambiarlo si algún día se publica en el repositorio oficial de manifiestos de Jellyfin.
+owner: "Lowitle"
+artifacts:
+  - "Jellyfin.Plugin.RtvePlay.dll"
+changelog: >
+  Primera versión: sincronización de programas por id/slug/URL, preferencia de MP4 progresivo con
+  fallback a HLS, filtrado opcional de contenido con DRM, subtítulos en es/en/ca/gl/eu y tarea
+  programada con intervalo configurable.
