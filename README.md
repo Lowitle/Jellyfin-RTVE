@@ -46,12 +46,15 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
 - **Secciones en la biblioteca**: cada programa se escribe en la subcarpeta de su tipo (`peliculas`,
   `series-de-tv`, `documentales`, `magacines`, `programas-de-tv`, `noticias`, `infantil`, `anime`,
   `podcast`, `archivo`, `otros`) dentro de la carpeta de destino, de modo que una única biblioteca de
-  *Programas de TV* se puede recorrer por secciones. Los programas que ya estaban sueltos en la raíz se
-  mueven solos a su subcarpeta, y la organización se puede desactivar.
+  *Programas de TV* se puede recorrer por secciones. La biblioteca se asocia a **cada una de esas
+  subcarpetas** (no a la carpeta raíz), así que un tipo entero se puede mover o excluir sin tocar los
+  demás. Los programas que ya estaban sueltos en la raíz se mueven solos a su subcarpeta, y la
+  organización se puede desactivar.
 - **Comprobación de la carpeta de destino**: el botón **Comprobar carpeta** dice si Jellyfin puede
   escribir en ella y, si no, propone carpetas escribibles del servidor.
-- **Biblioteca en un clic**: el botón **Crear biblioteca «RTVE Play»** da de alta la carpeta de destino
-  como biblioteca de tipo *Programas de TV* (o añade la carpeta a la biblioteca si ya existe), sin pasar
+- **Biblioteca en un clic**: el botón **Crear biblioteca «RTVE Play»** da de alta una biblioteca de tipo
+  *Programas de TV* con las subcarpetas de tipo como carpetas (o las añade a la biblioteca «RTVE Play» si
+  ya existía, quitando de ella la carpeta raíz para no indexar dos veces los mismos programas), sin pasar
   por el asistente de Jellyfin.
 - **Filtro de DRM opcional**: desactivado por defecto, porque RTVE marca con `hasDRM` buena parte del
   catálogo aunque después sirva el MP4/HLS sin cifrar.
@@ -65,7 +68,8 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
 - Jellyfin **10.11.x** (compilado contra `Jellyfin.Controller` 10.11).
 - Una carpeta escribible por Jellyfin para el plugin, añadida como biblioteca de tipo **Programas de TV**.
   Lo recomendable es una **biblioteca propia** (ver *Carpeta de destino: biblioteca separada*); el botón
-  **Crear biblioteca «RTVE Play»** de la página de configuración la da de alta por ti.
+  **Crear biblioteca «RTVE Play»** de la página de configuración asocia a la biblioteca cada subcarpeta de
+  tipo por ti.
 - Acceso de red a `www.rtve.es` / `api.rtve.es`. El catálogo de RTVE Play está geobloqueado fuera de
   España para algunos contenidos: las URLs se generan igualmente, pero la reproducción puede fallar.
 
@@ -152,10 +156,13 @@ paginar —cada página trae siempre los mismos 100 programas y los filtros solo
 filtro **Solo con vídeos**, convierte el filtro *Tipo* en la lista fija de carpetas de la biblioteca
 (*Películas* incluida) y recupera los programas del catálogo de Clan, que se perdían por error. La
 **1.0.7.0** hace que los recuentos del filtro *Tipo* sigan al filtro **Solo con vídeos**, para que el
-número de cada carpeta coincida con las filas que aparecen al elegirla.
+número de cada carpeta coincida con las filas que aparecen al elegirla. La **1.0.8.0** cambia la biblioteca
+del botón **Crear biblioteca**: en vez de asociar la carpeta raíz, asocia cada subcarpeta de tipo, y si la
+biblioteca ya apuntaba a la raíz la sustituye por las subcarpetas (Jellyfin indexa lo mismo, pero cada tipo
+se puede mover o excluir por separado y los programas no se indexan dos veces).
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
-publica el tag (`git tag v1.0.7.0; git push origin v1.0.7.0`). El manifiesto y la release se actualizan solos.
+publica el tag (`git tag v1.0.8.0; git push origin v1.0.8.0`). El manifiesto y la release se actualizan solos.
 
 ## Configuración
 
@@ -179,7 +186,7 @@ seleccionar. Recuerda pulsar **Guardar** al terminar.
 | --- | --- | --- |
 | **Carpeta de destino** | *(vacío)* | Ruta absoluta tal y como la ve el servidor. Debe ser una carpeta propia añadida como biblioteca de tipo *Programas de TV* (ver abajo). |
 | **Comprobar carpeta** | — | Comprueba que la carpeta existe y que Jellyfin puede escribir en ella; si falla, propone carpetas escribibles del servidor. |
-| **Crear biblioteca «RTVE Play»** | — | Crea (o reutiliza) una biblioteca de tipo *Programas de TV* apuntando a la carpeta de destino. Si la carpeta ya está en una biblioteca de series, no hace nada; si pertenece a una de otro tipo, avisa del conflicto. |
+| **Crear biblioteca «RTVE Play»** | — | Crea (o reutiliza) una biblioteca de tipo *Programas de TV* con cada subcarpeta de tipo (`peliculas`, `series-de-tv`, `documentales`…) como carpeta, o las añade a la biblioteca «RTVE Play» si ya existía. Si la biblioteca apuntaba a la carpeta raíz, se sustituye por las subcarpetas para que Jellyfin no indexe dos veces los mismos programas. Si la carpeta ya está en una biblioteca de series, no hace nada; si pertenece a una de otro tipo, avisa del conflicto. |
 | **Intervalo de actualización (horas)** | `12` | Periodicidad de la tarea programada (1–168). |
 | **Máximo de vídeos por programa** | `0` | Limita cuántos episodios se replican por programa; `0` = sin límite. |
 | **Preferir MP4 progresivo** | activado | Usa MP4 directo cuando existe (permite *seek*); si no, HLS. |
@@ -231,7 +238,9 @@ Jellyfin. Por eso lo más limpio es darle una carpeta propia y añadirla como **
 - **Borrar episodios que ya no están en el catálogo** es seguro, porque esa carpeta solo contiene lo que
   genera el plugin.
 - El botón **Crear biblioteca «RTVE Play»** de la página de configuración da de alta esa biblioteca
-  apuntando a la carpeta de destino (o añade la carpeta a la biblioteca «RTVE Play» si ya existía).
+  asociándole **cada subcarpeta de tipo** (no la carpeta raíz), o se las añade a la biblioteca «RTVE Play»
+  si ya existía. Si esa biblioteca apuntaba a la carpeta raíz, el botón la sustituye por las subcarpetas:
+  Jellyfin indexa lo mismo, pero así un tipo entero se puede mover a otra biblioteca sin arrastrar el resto.
 - Jellyfin la indexa igual que cualquier otra biblioteca: carátulas, `tvshow.nfo`, episodios y subtítulos.
 - **Docker**: monta un volumen dedicado (p. ej. `-v /srv/rtve-play:/media/rtve-play`) y escribe en
   *Carpeta de destino* la ruta **del contenedor** (`/media/rtve-play`), no la del host. La ruta debe ser
@@ -303,11 +312,12 @@ carpeta; el mensaje de la tarea indica ahora la ruta comprobada y las carpetas a
 
 Cada programa va a la subcarpeta de su tipo (`peliculas`, `series-de-tv`, `documentales`, `magacines`,
 `programas-de-tv`, `noticias`, `infantil`, `anime`, `podcast`, `archivo` u `otros`), así que la misma
-biblioteca de *Programas de TV* se puede recorrer por secciones sin crear una biblioteca por tipo. La
-opción **Organizar cada programa en una subcarpeta según su tipo** (activada por defecto) controla este
-comportamiento: al desactivarla, las series se escriben directamente en la carpeta de destino, como en
-las versiones anteriores. Si la carpeta de destino ya apunta a una de las secciones
-(`/media/rtve-play/documentales`), no se añade otra vez.
+biblioteca de *Programas de TV* se puede recorrer por secciones sin crear una biblioteca por tipo: el botón
+**Crear biblioteca «RTVE Play»** asocia a la biblioteca esas subcarpetas una por una, y no la carpeta raíz.
+La opción **Organizar cada programa en una subcarpeta según su tipo** (activada por defecto) controla este
+comportamiento: al desactivarla, las series se escriben directamente en la carpeta de destino y la
+biblioteca se asocia a esa carpeta, como en las versiones anteriores. Si la carpeta de destino ya apunta a
+una de las secciones (`/media/rtve-play/documentales`), no se añade otra vez y la biblioteca apunta a ella.
 
 Al actualizar desde una versión anterior, la primera sincronización mueve cada carpeta de programa que
 estuviera suelta en la raíz a su sección (`Directory.Move`): es rápido y conserva los archivos, pero

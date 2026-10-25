@@ -188,8 +188,9 @@
                             <div class="fieldDescription">
                                 Ruta absoluta, tal y como la ve el servidor Jellyfin, donde se escribirán las
                                 carpetas de cada programa. Lo recomendable es una carpeta propia (por ejemplo
-                                <code>/media/rtve-play</code>); con el botón de abajo Jellyfin la añade como
-                                biblioteca de tipo «Programas de TV».
+                                <code>/media/rtve-play</code>); con el botón de abajo Jellyfin añade a una
+                                biblioteca de tipo «Programas de TV» cada una de las subcarpetas de tipo (no la
+                                carpeta raíz), así que puedes mover o excluir un tipo entero sin tocar el resto.
                             </div>
                         </div>
                         <div>
@@ -197,7 +198,7 @@
                                 <span>Comprobar carpeta</span>
                             </button>
                             <button id="RtveCreateLibrary" is="emby-button" type="button" class="raised block">
-                                <span>Crear biblioteca «RTVE Play» y asociar la carpeta</span>
+                                <span>Crear biblioteca «RTVE Play» y asociar las carpetas</span>
                             </button>
                             <div id="RtvePathStatus" class="fieldDescription"></div>
                         </div>
@@ -212,9 +213,12 @@
                                 <code>magacines</code>, <code>programas-de-tv</code>, <code>noticias</code>,
                                 <code>infantil</code>, <code>anime</code>, <code>podcast</code>,
                                 <code>archivo</code> y <code>otros</code>; Jellyfin las indexa todas con la
-                                misma biblioteca de «Programas de TV». La primera vez que se activa, los
-                                programas que ya estaban sueltos en la raíz se mueven a su subcarpeta, y
-                                Jellyfin los verá como series nuevas (puede perderse el estado de visto).
+                                misma biblioteca de «Programas de TV», que se asocia a cada subcarpeta (si ya
+                                apuntaba a la carpeta raíz, el botón de arriba la sustituye por las
+                                subcarpetas para no indexar dos veces los mismos programas). La primera vez
+                                que se activa, los programas que ya estaban sueltos en la raíz se mueven a su
+                                subcarpeta, y Jellyfin los verá como series nuevas (puede perderse el estado
+                                de visto).
                             </div>
                         </div>
                         <div class="inputContainer">
@@ -1408,6 +1412,7 @@
 
             function rtveCreateLibrary() {
                 var path = document.querySelector('#RtveDestinationPath').value.trim();
+                var sections = document.querySelector('#RtveOrganizeSections').checked;
                 var target = document.querySelector('#RtvePathStatus');
 
                 if (!path) {
@@ -1418,7 +1423,9 @@
                 Dashboard.showLoadingMsg();
                 ApiClient.ajax({
                     type: 'POST',
-                    url: rtveUrl('Library/Create', { path: path }),
+                    // The folders of the library follow the «Organizar» check box of the form, so the
+                    // unsaved state is sent along: the sync and the paths of the library must agree.
+                    url: rtveUrl('Library/Create', { path: path, sections: sections ? 'true' : 'false' }),
                     dataType: 'json'
                 }).then(function (result) {
                     Dashboard.hideLoadingMsg();
@@ -1427,13 +1434,17 @@
                     var message = rtveField(result, 'message') || '';
                     var libraryName = rtveField(result, 'libraryName');
                     var checkedPath = rtveField(result, 'path') || path;
+                    var folders = rtveField(result, 'libraryPaths') || [];
 
                     if (!success) {
                         target.textContent = message || 'No se pudo crear la biblioteca.';
                         return;
                     }
 
-                    target.textContent = message + ' Ruta: «' + checkedPath + '».';
+                    target.textContent = message
+                        + (folders.length > 1
+                            ? ' Carpetas: ' + folders.length + '.'
+                            : ' Ruta: «' + checkedPath + '».');
                     rtveStatus('Biblioteca «' + (libraryName || 'RTVE Play')
                         + '» lista. Analiza la biblioteca desde Panel → Bibliotecas para que aparezcan los programas.');
                 }, function () {

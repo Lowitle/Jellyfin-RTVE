@@ -8,13 +8,26 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.RtvePlay.Library;
 
 /// <summary>
-/// Creates (or reuses) a «Programas de TV» library that points at the destination folder, so a fresh
-/// installation does not need a trip through the «Add media library» wizard.
+/// Creates (or reuses) a «Programas de TV» library that points at the folders of the destination, so
+/// a fresh installation does not need a trip through the «Add media library» wizard.
 /// </summary>
 /// <remarks>
+/// <para>
+/// With the sections enabled the library is associated with each section folder (<c>peliculas</c>,
+/// <c>series-de-tv</c>...) instead of with the destination root. Jellyfin indexes the same content
+/// either way, but each folder of the library then matches a section of the sync, so one kind of
+/// program can be moved to another library or excluded without touching the rest.
+/// </para>
+/// <para>
+/// A library created by a previous version that points at the root is migrated in place: the section
+/// folders are added and the root is removed, because the root already contains them and Jellyfin
+/// would index every series twice.
+/// </para>
+/// <para>
 /// RTVE videos flagged with <c>hasDRM</c> still expose a plain progressive MP4 and an unencrypted
 /// HLS playlist (the flag comes from the RTVE CMS, not from the served asset), so the library only
 /// has to index the <c>.strm</c> files this plugin writes.
+/// </para>
 /// </remarks>
 public static class LibraryProvisioner
 {
@@ -26,20 +39,27 @@ public static class LibraryProvisioner
     private static readonly JsonSerializerOptions CloneOptions = new();
 
     /// <summary>
-    /// Creates the library (or adds the folder to an existing one) and asks Jellyfin to scan it.
+    /// Creates the library (or updates the folders of an existing one) and asks Jellyfin to scan it.
     /// </summary>
     /// <param name="libraryManager">Library manager of the server.</param>
     /// <param name="path">Destination folder.</param>
     /// <param name="name">Library name; <see cref="DefaultLibraryName"/> when empty.</param>
+    /// <param name="organizeSections">
+    /// Whether the sync writes each program into the subfolder of its kind. When enabled, the folder
+    /// of the library is the section folder, not the destination root.
+    /// </param>
     /// <param name="logger">Logger.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="libraryMonitor">Library monitor used to tell Jellyfin about the new folders.</param>
     /// <returns>The result of the operation.</returns>
     public static async Task<LibraryProvisionStatus> ProvisionAsync(
         ILibraryManager libraryManager,
         string? path,
         string? name,
+        bool organizeSections,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ILibraryMonitor? libraryMonitor = null)
     {
         ArgumentNullException.ThrowIfNull(libraryManager);
         ArgumentNullException.ThrowIfNull(logger);
@@ -54,7 +74,8 @@ public static class LibraryProvisioner
                 "invalid",
                 null,
                 value,
-                "Escribe la carpeta de destino antes de crear la biblioteca.");
+                "Escribe la carpeta de destino antes de crear la biblioteca.",
+                []);
         }
 
         string fullPath;
@@ -67,41 +88,55 @@ public static class LibraryProvisioner
             or PathTooLongException or SecurityException)
         {
             logger.LogWarning("RTVE Play: no se puede usar {Path} como biblioteca: {Message}", value, ex.Message);
-            return new LibraryProvisionStatus(false, "invalid", null, value, ex.Message);
+            return new LibraryProvisionStatus(false, "invalid", null, value, ex.Message, []);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
         var libraries = libraryManager.GetVirtualFolders() ?? [];
-        var plan = Plan(libraryName, fullPath, ToFolders(libraries));
+        var plan = Plan(libraryName, fullPath, ToFolders(libraries), organizeSections);
 
         switch (plan.Action)
         {
             case LibraryProvisionAction.Invalid:
-                return new LibraryProvisionStatus(false, "invalid", null, fullPath, plan.Message);
+                return new LibraryProvisionStatus(false, "invalid", null, fullPath, plan.Message, []);
 
             case LibraryProvisionAction.Conflict:
-                return new LibraryProvisionStatus(false, "conflict", plan.ExistingLibrary, fullPath, plan.Message);
+                return new LibraryProvisionStatus(false, "conflict", plan.ExistingLibrary, fullPath, plan.Message, []);
 
             case LibraryProvisionAction.AlreadyPresent:
-                return new LibraryProvisionStatus(
-                    true,
-                    "existing",
-                    plan.ExistingLibrary,
-                    fullPath,
-                    $"La carpeta ya está asociada a la biblioteca «{plan.ExistingLibrary}»; no hay nada que hacer.");
+                return new LibraryProvisionStatus(true, "existing", plan.ExistingLibrary, fullPath, plan.Message, []);
 
             case LibraryProvisionAction.AddPath:
-                libraryManager.AddMediaPath(plan.LibraryName, new MediaPathInfo(fullPath));
+                // The folders are created before touching the library, so Jellyfin never stores a path
+                // that does not exist yet.
+                EnsureFolders(plan.Additions, logger);
+
+                foreach (var location in plan.Additions)
+                {
+                    libraryManager.AddMediaPath(plan.LibraryName, new MediaPathInfo(location));
+                }
+
+                // The root contains the section folders: keeping both would index every series twice.
+                foreach (var location in plan.Removals)
+                {
+                    libraryManager.RemoveMediaPath(plan.LibraryName, location);
+                }
+
+                Notify(libraryMonitor, plan.Additions, plan.Removals);
+
                 return new LibraryProvisionStatus(
                     true,
                     "updated",
                     plan.LibraryName,
                     fullPath,
-                    $"Carpeta asociada a la biblioteca «{plan.LibraryName}», que ya existía.");
+                    plan.Message + " Jellyfin está revisando las carpetas nuevas.",
+                    plan.Additions);
 
             default:
-                var options = BuildOptions(fullPath, libraries);
+                EnsureFolders(plan.Additions, logger);
+
+                var options = BuildOptions(plan.Additions, libraries);
                 await libraryManager
                     .AddVirtualFolder(plan.LibraryName, CollectionTypeOptions.tvshows, options, refreshLibrary: true)
                     .ConfigureAwait(false);
@@ -111,7 +146,8 @@ public static class LibraryProvisioner
                     "created",
                     plan.LibraryName,
                     fullPath,
-                    $"Biblioteca «{plan.LibraryName}» creada. Jellyfin la está escaneando ahora mismo.");
+                    plan.Message + " Jellyfin la está escaneando ahora mismo.",
+                    plan.Additions);
         }
     }
 
@@ -121,59 +157,184 @@ public static class LibraryProvisioner
     /// <param name="libraryName">Name requested for the library.</param>
     /// <param name="path">Destination folder.</param>
     /// <param name="libraries">Libraries already configured in the server.</param>
+    /// <param name="organizeSections">
+    /// Whether the library has to point at the section folders instead of at the destination root.
+    /// </param>
     /// <returns>The plan to apply.</returns>
-    public static LibraryProvisionPlan Plan(string libraryName, string path, IEnumerable<LibraryFolder>? libraries)
+    public static LibraryProvisionPlan Plan(
+        string libraryName,
+        string path,
+        IEnumerable<LibraryFolder>? libraries,
+        bool organizeSections = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(libraryName);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
+        var root = Path.TrimEndingDirectorySeparator(path.Trim());
+        var locations = Locations(root, organizeSections);
         var all = libraries?.Where(library => library is not null).ToList() ?? [];
 
-        foreach (var library in all)
-        {
-            if (!library.Locations.Any(location => SamePath(location, path)))
-            {
-                continue;
-            }
+        // A library of another type that already covers one of the folders would index the same
+        // series twice, so nothing is touched until the user removes that path.
+        var foreign = all.FirstOrDefault(library =>
+            !library.IsTvShows && library.Locations.Any(location => Covered(location, root, locations)));
 
-            return library.IsTvShows
-                ? new LibraryProvisionPlan(
-                    LibraryProvisionAction.AlreadyPresent,
-                    library.Name,
-                    library.Name,
-                    $"La carpeta ya está asociada a la biblioteca «{library.Name}».")
-                : new LibraryProvisionPlan(
-                    LibraryProvisionAction.Conflict,
-                    library.Name,
-                    library.Name,
-                    $"La carpeta ya está asociada a la biblioteca «{library.Name}», que no es de tipo «Programas de TV». "
-                    + "Usa otra carpeta o quita esa ruta de la biblioteca actual.");
+        if (foreign is not null)
+        {
+            var offender = foreign.Locations.FirstOrDefault(location => Covered(location, root, locations)) ?? root;
+
+            return new LibraryProvisionPlan(
+                LibraryProvisionAction.Conflict,
+                libraryName,
+                foreign.Name,
+                [],
+                [],
+                $"La carpeta ya está asociada a la biblioteca «{foreign.Name}» ({offender}), que no es de tipo «Programas de TV». "
+                + "Usa otra carpeta o quita esa ruta de la biblioteca actual.");
         }
 
+        // The name cannot be shared with a library of another type, even when the folders are free.
         var sameName = all.FirstOrDefault(library =>
             string.Equals(library.Name, libraryName, StringComparison.OrdinalIgnoreCase));
 
-        if (sameName is not null)
+        if (sameName is not null && !sameName.IsTvShows)
         {
-            return sameName.IsTvShows
-                ? new LibraryProvisionPlan(
-                    LibraryProvisionAction.AddPath,
-                    sameName.Name,
-                    sameName.Name,
-                    $"Se añadirá la carpeta a la biblioteca «{sameName.Name}», que ya existe.")
-                : new LibraryProvisionPlan(
-                    LibraryProvisionAction.Conflict,
-                    sameName.Name,
-                    sameName.Name,
-                    $"Ya existe una biblioteca llamada «{sameName.Name}» que no es de tipo «Programas de TV»; "
-                    + "cambia el nombre de la biblioteca o elige otra carpeta.");
+            return new LibraryProvisionPlan(
+                LibraryProvisionAction.Conflict,
+                sameName.Name,
+                sameName.Name,
+                [],
+                [],
+                $"Ya existe una biblioteca llamada «{sameName.Name}» que no es de tipo «Programas de TV»; "
+                + "cambia el nombre de la biblioteca o elige otra carpeta.");
         }
 
+        // The library with the requested name is the one to update; when it does not exist, a TV
+        // library created by a previous version already pointing at the root is reused instead of
+        // creating a second one with the same content.
+        var candidate = sameName
+            ?? all.FirstOrDefault(library =>
+                library.IsTvShows && library.Locations.Any(location => Covered(location, root, locations)));
+
+        if (candidate is null)
+        {
+            return new LibraryProvisionPlan(
+                LibraryProvisionAction.Create,
+                libraryName,
+                null,
+                locations,
+                [],
+                locations.Count > 1
+                    ? $"Se creará la biblioteca «{libraryName}» de tipo «Programas de TV» con {locations.Count} carpetas, una por tipo de programa."
+                    : $"Se creará la biblioteca «{libraryName}» de tipo «Programas de TV».");
+        }
+
+        var additions = locations
+            .Where(location => !candidate.Locations.Any(existing => SamePath(existing, location)))
+            .ToArray();
+
+        // Only the destination root is superseded: it is the folder that contains every section, so
+        // keeping it would make Jellyfin index the same series twice. Other folders of the library
+        // are left alone.
+        var removals = candidate.Locations
+            .Where(location => SamePath(location, root) && !locations.Any(desired => SamePath(desired, location)))
+            .ToArray();
+
+        if (additions.Length == 0 && removals.Length == 0)
+        {
+            return new LibraryProvisionPlan(
+                LibraryProvisionAction.AlreadyPresent,
+                candidate.Name,
+                candidate.Name,
+                [],
+                [],
+                locations.Count > 1
+                    ? $"La biblioteca «{candidate.Name}» ya tiene asociadas las {locations.Count} carpetas; no hay nada que hacer."
+                    : $"La carpeta ya está asociada a la biblioteca «{candidate.Name}»; no hay nada que hacer.");
+        }
+
+        var message = (additions.Length, removals.Length) switch
+        {
+            (0, _) => $"La biblioteca «{candidate.Name}» ya tiene asociadas las {locations.Count} carpetas; "
+                + "se quitará de ella la carpeta raíz, que las incluye.",
+            (_, 0) => $"Se añadirán {additions.Length} carpetas a la biblioteca «{candidate.Name}», que ya existe.",
+            _ => $"Se añadirán {additions.Length} carpetas a la biblioteca «{candidate.Name}» y se quitará de ella "
+                + "la carpeta raíz, que las incluye."
+        };
+
         return new LibraryProvisionPlan(
-            LibraryProvisionAction.Create,
-            libraryName,
-            null,
-            $"Se creará la biblioteca «{libraryName}» de tipo «Programas de TV».");
+            LibraryProvisionAction.AddPath,
+            candidate.Name,
+            candidate.Name,
+            additions,
+            removals,
+            message);
+    }
+
+    /// <summary>
+    /// Gets the folders the library has to index: one per section, or the destination root when the
+    /// sections are disabled or when the destination already points at a single section.
+    /// </summary>
+    /// <param name="root">Destination folder, without the trailing separator.</param>
+    /// <param name="organizeSections">Whether the sync writes each program into the subfolder of its kind.</param>
+    /// <returns>The folders of the library.</returns>
+    private static IReadOnlyList<string> Locations(string root, bool organizeSections)
+        => organizeSections && !ProgramSections.IsSectionFolder(root)
+            ? ProgramSections.SectionPaths(root)
+            : [root];
+
+    /// <summary>
+    /// Tells whether a library folder already indexes the content of the requested folders, either
+    /// because it is one of them or because it is the destination root that contains all of them.
+    /// </summary>
+    /// <param name="location">Folder of an existing library.</param>
+    /// <param name="root">Destination folder.</param>
+    /// <param name="locations">Folders the library has to index.</param>
+    /// <returns><c>true</c> when the folder overlaps with the requested ones.</returns>
+    private static bool Covered(string? location, string root, IReadOnlyList<string> locations)
+        => SamePath(location, root) || locations.Any(desired => SamePath(desired, location));
+
+    /// <summary>
+    /// Creates the folders that are about to be added to the library, so Jellyfin never stores a
+    /// path that does not exist yet (the sync only creates them when it writes the first program).
+    /// </summary>
+    /// <param name="locations">Folders of the library.</param>
+    /// <param name="logger">Logger.</param>
+    private static void EnsureFolders(IReadOnlyList<string> locations, ILogger logger)
+    {
+        foreach (var location in locations)
+        {
+            try
+            {
+                Directory.CreateDirectory(location);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or SecurityException)
+            {
+                // The path is added anyway: the sync reports what it cannot write, and a missing
+                // folder shows up in Jellyfin as an empty section of the library.
+                logger.LogWarning("RTVE Play: no se pudo crear {Path} al añadirlo a la biblioteca: {Message}", location, ex.Message);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tells the library monitor about the folders that changed, so Jellyfin refreshes them without
+    /// waiting for the next scheduled scan.
+    /// </summary>
+    /// <param name="libraryMonitor">Library monitor; ignored when the server did not provide one.</param>
+    /// <param name="added">Folders added to the library.</param>
+    /// <param name="removed">Folders removed from the library.</param>
+    private static void Notify(ILibraryMonitor? libraryMonitor, IEnumerable<string> added, IEnumerable<string> removed)
+    {
+        if (libraryMonitor is null)
+        {
+            return;
+        }
+
+        foreach (var location in added.Concat(removed))
+        {
+            libraryMonitor.ReportFileSystemChanged(location);
+        }
     }
 
     private static bool IsTvLibrary(VirtualFolderInfo library)
@@ -197,7 +358,10 @@ public static class LibraryProvisioner
     /// Builds the options of the new library, reusing the ones of an existing TV library (they carry
     /// the metadata and image providers the user already tuned) and falling back to sane defaults.
     /// </summary>
-    private static LibraryOptions BuildOptions(string path, IReadOnlyList<VirtualFolderInfo> libraries)
+    /// <param name="locations">Folders of the new library.</param>
+    /// <param name="libraries">Libraries of the server.</param>
+    /// <returns>The options of the library.</returns>
+    private static LibraryOptions BuildOptions(IReadOnlyList<string> locations, IReadOnlyList<VirtualFolderInfo> libraries)
     {
         var template = libraries
             .FirstOrDefault(library => IsTvLibrary(library) && library.LibraryOptions is not null)
@@ -220,8 +384,8 @@ public static class LibraryProvisioner
             options.SeasonZeroDisplayName = "Especiales";
         }
 
-        // The folder of this library is set here, never copied from the template.
-        options.PathInfos = [new MediaPathInfo(path)];
+        // The folders of this library are set here, never copied from the template.
+        options.PathInfos = locations.Select(location => new MediaPathInfo(location)).ToArray();
         return options;
     }
 
@@ -279,12 +443,12 @@ public enum LibraryProvisionAction
     Create,
 
     /// <summary>
-    /// The folder has to be added to an existing library with the requested name.
+    /// The folders have to be added to (and the destination root removed from) an existing library.
     /// </summary>
     AddPath,
 
     /// <summary>
-    /// A library already contains the folder.
+    /// A library already contains the folders of the destination.
     /// </summary>
     AlreadyPresent,
 
@@ -308,11 +472,15 @@ public sealed record LibraryFolder(string Name, bool IsTvShows, IReadOnlyList<st
 /// <param name="Action">Action to apply.</param>
 /// <param name="LibraryName">Library to create or update.</param>
 /// <param name="ExistingLibrary">Library that already exists, when applicable.</param>
+/// <param name="Additions">Folders to add to the library.</param>
+/// <param name="Removals">Folders to remove from the library.</param>
 /// <param name="Message">Human readable explanation.</param>
 public sealed record LibraryProvisionPlan(
     LibraryProvisionAction Action,
     string LibraryName,
     string? ExistingLibrary,
+    IReadOnlyList<string> Additions,
+    IReadOnlyList<string> Removals,
     string Message);
 
 /// <summary>
@@ -325,9 +493,11 @@ public sealed record LibraryProvisionPlan(
 /// <param name="LibraryName">Library that was created or updated.</param>
 /// <param name="Path">Normalized destination folder.</param>
 /// <param name="Message">Message shown to the user.</param>
+/// <param name="LibraryPaths">Folders the library indexes after the request.</param>
 public sealed record LibraryProvisionStatus(
     bool Success,
     string Outcome,
     string? LibraryName,
     string Path,
-    string Message);
+    string Message,
+    IReadOnlyList<string> LibraryPaths);

@@ -130,4 +130,55 @@ public class ProgramSectionsTests
     {
         Assert.Throws<ArgumentException>(() => ProgramSections.RootFor(destination, true, ProgramSection.Otros));
     }
+
+    [Fact]
+    public void SectionPaths_ReturnsOneFolderPerSectionInsideTheDestination()
+    {
+        var destination = Path.Combine(Path.GetTempPath(), "rtve-play");
+
+        var paths = ProgramSections.SectionPaths(destination);
+
+        Assert.Equal(ProgramSections.FolderNames.Count, paths.Count);
+        Assert.All(paths, path => Assert.Equal(destination, Path.GetDirectoryName(path)));
+        Assert.Equal(
+            paths.Select(path => Path.GetFileName(path)),
+            ProgramSections.FolderNames);
+    }
+
+    [Fact]
+    public void SectionPaths_KeepsTheDestinationWithoutTheTrailingSeparator()
+    {
+        var destination = Path.Combine(Path.GetTempPath(), "rtve-play") + Path.DirectorySeparatorChar;
+
+        var paths = ProgramSections.SectionPaths(destination);
+
+        Assert.All(paths, path => Assert.Equal(
+            Path.TrimEndingDirectorySeparator(destination),
+            Path.GetDirectoryName(path)));
+    }
+
+    [Theory]
+    [InlineData(ProgramSections.PeliculasFolder)]
+    [InlineData(ProgramSections.SeriesFolder)]
+    [InlineData("Documentales")]
+    public void IsSectionFolder_DetectsTheFolderOfASection(string folder)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "rtve-play", folder);
+
+        Assert.True(ProgramSections.IsSectionFolder(path));
+        Assert.True(ProgramSections.IsSectionFolder(path + Path.DirectorySeparatorChar));
+    }
+
+    [Theory]
+    [InlineData("rtve-play")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsSectionFolder_RejectsTheRootAndEmptyPaths(string folder)
+    {
+        var path = folder.Length == 0
+            ? folder
+            : Path.Combine(Path.GetTempPath(), folder);
+
+        Assert.False(ProgramSections.IsSectionFolder(path));
+    }
 }

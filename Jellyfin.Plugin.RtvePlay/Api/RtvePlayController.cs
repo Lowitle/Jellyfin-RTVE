@@ -21,6 +21,7 @@ public sealed class RtvePlayController : ControllerBase
     private readonly RtveClient _client;
     private readonly ITaskManager _taskManager;
     private readonly ILibraryManager _libraryManager;
+    private readonly ILibraryMonitor _libraryMonitor;
     private readonly ILogger<RtvePlayController> _logger;
 
     /// <summary>
@@ -29,16 +30,19 @@ public sealed class RtvePlayController : ControllerBase
     /// <param name="client">RTVE API client.</param>
     /// <param name="taskManager">Task manager.</param>
     /// <param name="libraryManager">Library manager.</param>
+    /// <param name="libraryMonitor">Library monitor, used to refresh the folders added to a library.</param>
     /// <param name="logger">Logger.</param>
     public RtvePlayController(
         RtveClient client,
         ITaskManager taskManager,
         ILibraryManager libraryManager,
+        ILibraryMonitor libraryMonitor,
         ILogger<RtvePlayController> logger)
     {
         _client = client;
         _taskManager = taskManager;
         _libraryManager = libraryManager;
+        _libraryMonitor = libraryMonitor;
         _logger = logger;
     }
 
@@ -132,8 +136,8 @@ public sealed class RtvePlayController : ControllerBase
         => Ok(LibraryPath.Check(path));
 
     /// <summary>
-    /// Creates a «Programas de TV» library that points at the destination folder, or adds the folder
-    /// to the library that already exists.
+    /// Creates a «Programas de TV» library that points at the folders of the destination, or updates
+    /// the folders of the library that already exists.
     /// </summary>
     /// <remarks>
     /// The status is always returned with HTTP 200 and a <c>success</c> flag, so the configuration
@@ -141,24 +145,40 @@ public sealed class RtvePlayController : ControllerBase
     /// </remarks>
     /// <param name="path">Destination folder; the configured one when omitted.</param>
     /// <param name="name">Library name; «RTVE Play» when omitted.</param>
+    /// <param name="sections">
+    /// Whether the library has to point at the section folders; the configured value when omitted.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the operation.</returns>
     [HttpPost("Library/Create")]
     public async Task<ActionResult<LibraryProvisionStatus>> CreateLibraryAsync(
         [FromQuery] string? path,
         [FromQuery] string? name,
+        [FromQuery] bool? sections,
         CancellationToken cancellationToken)
     {
         var configuration = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         var target = string.IsNullOrWhiteSpace(path) ? configuration.DestinationPath : path;
 
         var status = await LibraryProvisioner
-            .ProvisionAsync(_libraryManager, target, name, _logger, cancellationToken)
+            .ProvisionAsync(
+                _libraryManager,
+                target,
+                name,
+                sections ?? configuration.OrganizeSections,
+                _logger,
+                cancellationToken,
+                _libraryMonitor)
             .ConfigureAwait(false);
 
         if (status.Success)
         {
-            _logger.LogInformation("RTVE Play: biblioteca {Outcome} ({Name} → {Path})", status.Outcome, status.LibraryName, status.Path);
+            _logger.LogInformation(
+                "RTVE Play: biblioteca {Outcome} ({Name} → {Path}, {Folders} carpetas)",
+                status.Outcome,
+                status.LibraryName,
+                status.Path,
+                status.LibraryPaths.Count);
         }
         else
         {

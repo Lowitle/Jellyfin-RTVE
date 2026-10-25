@@ -99,6 +99,38 @@ public static class ProgramSections
     ];
 
     /// <summary>
+    /// Gets the folder of every section inside the destination folder.
+    /// </summary>
+    /// <param name="destinationPath">Destination folder of the library.</param>
+    /// <returns>The folder of each section, in the order <see cref="FolderNames"/> declares them.</returns>
+    public static IReadOnlyList<string> SectionPaths(string destinationPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+
+        var root = Path.TrimEndingDirectorySeparator(destinationPath.Trim());
+
+        return FolderNames.Select(folder => Path.Combine(root, folder)).ToArray();
+    }
+
+    /// <summary>
+    /// Tells whether a folder is one of the section folders, which means the configured destination
+    /// already points at a single section instead of at the root of the library.
+    /// </summary>
+    /// <param name="path">Folder to check.</param>
+    /// <returns><c>true</c> when the last segment of the path is a section folder.</returns>
+    public static bool IsSectionFolder(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path.Trim()));
+
+        return FolderNames.Any(folder => string.Equals(folder, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Franchises of Japanese animation that RTVE publishes inside the children's catalog, which has
     /// no «Anime» type of its own. They are only checked once the program is already children's
     /// content, so a documentary called «Pokémon» would never land in <c>anime</c>.
