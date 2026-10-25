@@ -21,8 +21,11 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
 
 - **Programas configurables**: se indica el id numérico (`111570`), el slug de la página (`saber-vivir`)
   o la URL completa del programa, y el plugin resuelve el resto.
-- **Catálogo navegable**: el botón **Ver todos los programas** lista el catálogo paginado de RTVE
-  (solo programas de televisión) con casillas para añadir varios de golpe.
+- **Catálogo navegable**: el botón **Ver todos los programas** muestra el catálogo paginado de RTVE
+  (solo programas de televisión) en una tabla con las columnas *Nombre*, *Id*, *Tipo* (el tipo
+  normalizado: *Serie*, *Documental*, *Infantil*…) y *Género* (las categorías de RTVE). Se ordena
+  pulsando cualquier cabecera y se filtra por texto, tipo de contenido y género; las casillas añaden
+  varios programas de golpe.
 - **Series y episodios**: agrupa los vídeos de cada programa en una serie, con temporadas y numeración
   de episodios (usa `seasonNumber`/`episode` de RTVE cuando existen y, si no, ordena por fecha).
 - **MP4 progresivo con fallback a HLS**: intenta primero la URL MP4 (`PreferMp4`), lo que permite *seek*
@@ -139,10 +142,12 @@ por defecto (con migración automática de la configuración guardada) y reinten
 `429`/`5xx` de RTVE. La **1.0.4.0** se publica con todo lo que quedaba pendiente: los géneros del tipo de
 programa, la etiqueta con el tipo exacto y el id de IMDb en el `tvshow.nfo` (previsto para la 1.0.3.0),
 más la organización de la carpeta de destino en subcarpetas por tipo de programa con la migración
-automática de los programas ya sincronizados.
+automática de los programas ya sincronizados. La **1.0.5.0** convierte la selección de programas en una
+tabla ordenable y filtrable (nombre, id, tipo de contenido y género) y unifica la anchura de todas las
+secciones de la página de configuración.
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
-publica el tag (`git tag v1.0.4.0; git push origin v1.0.4.0`). El manifiesto y la release se actualizan solos.
+publica el tag (`git tag v1.0.5.0; git push origin v1.0.5.0`). El manifiesto y la release se actualizan solos.
 
 ## Configuración
 
@@ -155,7 +160,7 @@ La página del plugin está en **Panel de control → Plugins → RTVE Play**.
 | **Id, slug o URL del programa** | Acepta `111570`, `saber-vivir` o `https://www.rtve.es/play/videos/saber-vivir/`. |
 | **Añadir programa** | Resuelve la referencia contra la API de RTVE y la guarda con su título. |
 | **Buscar por título** | Filtra el catálogo por ese texto en el panel del listado (solo programas de televisión: los de radio de RTVE Play se descartan). |
-| **Ver todos los programas** | Lista el catálogo completo **paginado**: marca las casillas que quieras y pulsa **Añadir seleccionados**. También hay «Seleccionar la página» y botones *Anterior* / *Siguiente*. |
+| **Ver todos los programas** | Muestra el catálogo completo **paginado** en una tabla (*Nombre*, *Id*, *Tipo*, *Género*) con cabeceras para ordenar y filtros por texto, tipo de contenido y género. Marca las casillas y pulsa **Añadir seleccionados**; *Anterior* / *Siguiente* cambian de página y «Ocultar los ya añadidos» deja fuera los que ya están en la lista. |
 
 Los programas ya añadidos aparecen marcados en el listado como *ya añadido* y no se pueden volver a
 seleccionar. Recuerda pulsar **Guardar** al terminar.
@@ -339,8 +344,8 @@ dos episodios comparten título. Los archivos solo se reescriben si el contenido
 
 ```powershell
 dotnet build                     # compila plugin y tests (Jellyfin.Plugin.RtvePlay.sln)
-dotnet test                      # 223 pruebas (xunit)
-pwsh ./package.ps1               # genera dist/rtveplay_1.0.0.0.zip + SHA256
+dotnet test                      # 226 pruebas (xunit)
+pwsh ./package.ps1               # genera dist/rtveplay_1.0.5.0.zip + SHA256
 # Windows PowerShell 5.1: powershell -ExecutionPolicy Bypass -File .\package.ps1
 ```
 

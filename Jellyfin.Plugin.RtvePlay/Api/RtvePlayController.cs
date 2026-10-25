@@ -82,9 +82,12 @@ public sealed class RtvePlayController : ControllerBase
         {
             var id = await _client.ResolveProgramIdAsync(value, cancellationToken).ConfigureAwait(false);
             var program = await _client.GetProgramAsync(id, cancellationToken).ConfigureAwait(false);
-            var title = program?.Title ?? value.Trim();
 
-            return Ok(new RtveProgramSummary(id, title, program?.HtmlUrl, program?.PosterImage));
+            // The kind and the genres come from the summary projection, so the entry added by hand
+            // shows the same columns as the ones picked from the catalog table.
+            return Ok(program is null
+                ? new RtveProgramSummary(id, value.Trim(), null, null)
+                : RtveClient.ToSummary(program) with { Id = id });
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
         {

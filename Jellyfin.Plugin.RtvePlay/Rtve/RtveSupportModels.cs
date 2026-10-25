@@ -91,13 +91,26 @@ public sealed class RtveSubtitle
 }
 
 /// <summary>
-/// A program search result exposed by the plugin API.
+/// A program of the catalog exposed by the plugin API.
 /// </summary>
 /// <param name="Id">Program id.</param>
 /// <param name="Title">Program title.</param>
 /// <param name="Url">Program page URL.</param>
 /// <param name="ImageUrl">Program poster URL.</param>
-public sealed record RtveProgramSummary(string Id, string Title, string? Url, string? ImageUrl);
+/// <param name="Kind">
+/// Kind of program resolved by <see cref="Jellyfin.Plugin.RtvePlay.Library.ProgramClassifier"/>
+/// («Serie», «Documental», «Infantil»...), or <c>null</c> when RTVE publishes no known type.
+/// </param>
+/// <param name="ProgramType">Type published by RTVE («Magacín semanal», «Serie Documental»...), or <c>null</c>.</param>
+/// <param name="Genres">RTVE categories of the program («Cultura», «Humor»...); may be empty.</param>
+public sealed record RtveProgramSummary(
+    string Id,
+    string Title,
+    string? Url,
+    string? ImageUrl,
+    string? Kind = null,
+    string? ProgramType = null,
+    IReadOnlyList<string>? Genres = null);
 
 /// <summary>
 /// A page of the RTVE program catalog.

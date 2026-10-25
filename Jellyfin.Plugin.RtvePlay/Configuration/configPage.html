@@ -6,6 +6,146 @@
 </head>
 <body>
     <div id="RtvePlayConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+
+        <style type="text/css">
+            /* Jellyfin caps every <form> at 54em (site.scss), so «Biblioteca», «Subtítulos» and
+               «Opciones» ended up narrower than the program section. This page uses the full width. */
+            #RtvePlayConfigPage form {
+                max-width: none;
+            }
+
+            #RtvePlayConfigPage .inputContainer > .emby-input {
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            /* Program catalog: filters, sortable table and pager. */
+            #RtvePlayConfigPage .rtveFilters {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: stretch;
+                gap: 0.6em 1em;
+                margin: 0.6em 0 1em;
+            }
+
+            #RtvePlayConfigPage .rtveFilterField {
+                display: flex;
+                flex-direction: column;
+                flex: 1 1 12em;
+                min-width: 9em;
+            }
+
+            #RtvePlayConfigPage .rtveFilterField > .rtveFilterLabel {
+                display: block;
+                margin-bottom: 0.25em;
+                font-size: 0.85em;
+                opacity: 0.75;
+            }
+
+            #RtvePlayConfigPage .rtveFilterText,
+            #RtvePlayConfigPage .rtveSelect {
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            #RtvePlayConfigPage .rtveSelect {
+                font: inherit;
+                color: inherit;
+                background: transparent;
+                border: 1px solid rgba(128, 128, 128, 0.6);
+                border-radius: 0.25em;
+                padding: 0.55em 0.4em;
+            }
+
+            #RtvePlayConfigPage .rtveFilterToggle {
+                flex: 0 0 auto;
+                min-width: 0;
+                justify-content: flex-end;
+            }
+
+            #RtvePlayConfigPage .rtveTableWrap {
+                width: 100%;
+                overflow-x: auto;
+                margin-bottom: 0.4em;
+            }
+
+            #RtvePlayConfigPage .rtveTable {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.95em;
+            }
+
+            #RtvePlayConfigPage .rtveTable th,
+            #RtvePlayConfigPage .rtveTable td {
+                padding: 0.45em 0.6em;
+                border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+                text-align: left;
+                vertical-align: middle;
+            }
+
+            #RtvePlayConfigPage .rtveTable th {
+                font-weight: 600;
+                white-space: nowrap;
+            }
+
+            #RtvePlayConfigPage .rtveTable tbody tr:hover {
+                background: rgba(128, 128, 128, 0.12);
+            }
+
+            #RtvePlayConfigPage .rtveTable .rtveCellCheck {
+                width: 2.2em;
+                padding-right: 0;
+            }
+
+            #RtvePlayConfigPage .rtveTable .rtveCellId {
+                width: 6em;
+                font-variant-numeric: tabular-nums;
+                white-space: nowrap;
+            }
+
+            #RtvePlayConfigPage .rtveTable .rtveCellKind {
+                width: 10em;
+            }
+
+            #RtvePlayConfigPage .rtveCellType {
+                font-size: 0.85em;
+            }
+
+            #RtvePlayConfigPage .rtveSortable {
+                cursor: pointer;
+                user-select: none;
+            }
+
+            #RtvePlayConfigPage .rtveSortable:focus-visible {
+                outline: 1px solid #00a4dc;
+            }
+
+            #RtvePlayConfigPage .rtveSortMark {
+                color: #00a4dc;
+            }
+
+            #RtvePlayConfigPage .rtveMuted {
+                opacity: 0.7;
+            }
+
+            #RtvePlayConfigPage .rtveTableEmpty {
+                padding: 1em 0.2em;
+            }
+
+            #RtvePlayConfigPage .rtveCatalogPager {
+                display: flex;
+                align-items: center;
+                gap: 0.6em;
+                margin: 0.4em 0 0.6em;
+            }
+
+            #RtvePlayConfigPage .rtvePagerText {
+                flex: 1 1 auto;
+                text-align: center;
+                opacity: 0.75;
+            }
+        </style>
+
         <div data-role="content">
             <div class="content-primary">
                 <div class="verticalSection">
@@ -224,8 +364,21 @@
                     totalItems: 0,
                     hasMore: false,
                     query: '',
-                    pageSize: 40,
-                    selected: {}
+                    pageSize: 100,
+                    selected: {},
+                    // Table state: it survives the re-renders, so filtering or sorting never loses
+                    // the programs already ticked.
+                    filter: '',
+                    kind: '',
+                    genre: '',
+                    hideAdded: false,
+                    sort: 'title',
+                    dir: 1,
+                    headerCells: {},
+                    selectAll: null,
+                    addButton: null,
+                    countLabel: null,
+                    body: null
                 }
             };
 
@@ -382,7 +535,8 @@
             // document.registerElement: creating it with the "is" option upgrades it and its
             // attachedCallback REQUIRES a <span> inside the parent label (it looks it up and adds the
             // "checkboxLabel" class to it). Without that span the callback throws and the whole render
-            // of the list is aborted, so always build check boxes through rtveCheckboxRow().
+            // of the table is aborted, so every check box goes into a label that already has a <span>
+            // (see rtveCatalogRow and rtveSelectAllCell).
             function rtveCheckbox() {
                 var input;
                 try {
@@ -394,28 +548,6 @@
                 input.type = 'checkbox';
                 input.className = 'emby-checkbox';
                 return input;
-            }
-
-            // One row of the catalog: a check box plus its title, with an optional secondary line.
-            function rtveCheckboxRow(title, subtitle, checked, disabled, onChange) {
-                var row = rtveElement('div', 'listItem listItem-border');
-                var label = rtveElement('label', 'emby-checkbox-label');
-                var checkbox = rtveCheckbox();
-                checkbox.checked = checked;
-                checkbox.disabled = disabled;
-                if (onChange) {
-                    checkbox.addEventListener('change', onChange);
-                }
-                label.appendChild(checkbox);
-
-                var text = rtveElement('span', '', title);
-                if (subtitle) {
-                    text.appendChild(rtveElement('span', 'secondary', ' · ' + subtitle));
-                }
-                label.appendChild(text);
-
-                row.appendChild(label);
-                return row;
             }
 
             function rtveRow(title, subtitle, actionLabel, actionClass, onAction) {
@@ -466,12 +598,486 @@
                 });
             }
 
+            // The catalog payload arrives as plain text, but RTVE occasionally publishes HTML
+            // entities in a title or a genre, so everything is normalized once before rendering.
+            function rtveClean(value) {
+                if (value === undefined || value === null) {
+                    return '';
+                }
+
+                var text = String(value);
+                if (text.indexOf('&') >= 0 || text.indexOf('<') >= 0) {
+                    var wrapper = document.createElement('div');
+                    wrapper.innerHTML = text;
+                    text = wrapper.textContent || '';
+                }
+
+                return text.replace(/\s+/g, ' ').trim();
+            }
+
+            // Lower case without diacritics, so «magacin» finds «Magacín» and «genero» finds «Género».
+            function rtveFold(value) {
+                var text = rtveClean(value).toLowerCase();
+                if (text.normalize) {
+                    text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                }
+                return text;
+            }
+
+            function rtveCatalogId(item) {
+                return rtveClean(rtveField(item, 'id'));
+            }
+
+            function rtveCatalogTitle(item) {
+                return rtveClean(rtveField(item, 'title')) || rtveCatalogId(item);
+            }
+
+            function rtveCatalogKind(item) {
+                return rtveClean(rtveField(item, 'kind'));
+            }
+
+            function rtveCatalogType(item) {
+                return rtveClean(rtveField(item, 'programType'));
+            }
+
+            function rtveCatalogGenres(item) {
+                var genres = rtveField(item, 'genres');
+                if (typeof genres === 'string') {
+                    genres = genres.split(',');
+                }
+                if (!Array.isArray(genres)) {
+                    return [];
+                }
+                return genres.map(rtveClean).filter(function (genre) { return genre.length > 0; });
+            }
+
+            function rtveCatalogSortValue(item, key) {
+                switch (key) {
+                    case 'id':
+                        return rtveCatalogId(item);
+                    case 'kind':
+                        return rtveCatalogKind(item);
+                    case 'genre':
+                        return rtveCatalogGenres(item).join(', ');
+                    default:
+                        return rtveCatalogTitle(item);
+                }
+            }
+
+            function rtveCatalogCompare(left, right) {
+                var catalog = RtvePlayConfig.catalog;
+                var first = rtveCatalogSortValue(left, catalog.sort);
+                var second = rtveCatalogSortValue(right, catalog.sort);
+
+                if (catalog.sort === 'id') {
+                    var firstNumber = parseInt(first, 10);
+                    var secondNumber = parseInt(second, 10);
+                    if (!isNaN(firstNumber) && !isNaN(secondNumber) && firstNumber !== secondNumber) {
+                        return (firstNumber - secondNumber) * catalog.dir;
+                    }
+                }
+
+                var result = first.localeCompare(second, 'es', { sensitivity: 'base' });
+                if (result === 0 && catalog.sort !== 'title') {
+                    result = rtveCatalogTitle(left)
+                        .localeCompare(rtveCatalogTitle(right), 'es', { sensitivity: 'base' });
+                }
+                return result * catalog.dir;
+            }
+
+            // The filters work on the programs of the loaded page: the RTVE API pages the catalog
+            // server side, so there is nothing else to filter.
+            function rtveCatalogVisibleItems() {
+                var catalog = RtvePlayConfig.catalog;
+                var text = rtveFold(catalog.filter);
+
+                var items = catalog.items.filter(function (item) {
+                    var id = rtveCatalogId(item);
+                    if (catalog.hideAdded && rtveCatalogIsAdded(id)) {
+                        return false;
+                    }
+                    if (catalog.kind && rtveCatalogKind(item) !== catalog.kind) {
+                        return false;
+                    }
+                    if (catalog.genre && rtveCatalogGenres(item).indexOf(catalog.genre) < 0) {
+                        return false;
+                    }
+                    if (!text) {
+                        return true;
+                    }
+
+                    var haystack = [
+                        rtveCatalogTitle(item),
+                        id,
+                        rtveCatalogKind(item),
+                        rtveCatalogType(item),
+                        rtveCatalogGenres(item).join(' ')
+                    ].join(' ');
+
+                    return rtveFold(haystack).indexOf(text) >= 0;
+                });
+
+                items.sort(rtveCatalogCompare);
+                return items;
+            }
+
+            function rtveCatalogValues(selector) {
+                var seen = {};
+                var values = [];
+
+                RtvePlayConfig.catalog.items.forEach(function (item) {
+                    selector(item).forEach(function (value) {
+                        var key = rtveFold(value);
+                        if (key.length === 0 || seen[key]) {
+                            return;
+                        }
+                        seen[key] = true;
+                        values.push(value);
+                    });
+                });
+
+                values.sort(function (a, b) {
+                    return a.localeCompare(b, 'es', { sensitivity: 'base' });
+                });
+                return values;
+            }
+
+            // A filter left over from the previous page would hide every row and the combo would not
+            // be able to show it, so filters that no longer match anything are dropped on load.
+            function rtveResetUnavailableFilters() {
+                var catalog = RtvePlayConfig.catalog;
+                var kinds = rtveCatalogValues(function (item) {
+                    var kind = rtveCatalogKind(item);
+                    return kind ? [kind] : [];
+                });
+
+                if (catalog.kind && kinds.indexOf(catalog.kind) < 0) {
+                    catalog.kind = '';
+                }
+
+                if (catalog.genre && rtveCatalogValues(rtveCatalogGenres).indexOf(catalog.genre) < 0) {
+                    catalog.genre = '';
+                }
+            }
+
+            function rtveFilterField(labelText, control) {
+                var field = rtveElement('div', 'rtveFilterField');
+                var label = rtveElement('label', 'rtveFilterLabel', labelText);
+                label.htmlFor = control.id;
+                field.appendChild(label);
+                field.appendChild(control);
+                return field;
+            }
+
+            function rtveFilterSelect(id, value, values, allLabel, onChange) {
+                var select = rtveElement('select', 'rtveSelect');
+                select.id = id;
+
+                [{ value: '', label: allLabel }].concat(values.map(function (option) {
+                    return { value: option, label: option };
+                })).forEach(function (option) {
+                    var element = rtveElement('option', '', option.label);
+                    element.value = option.value;
+                    element.selected = option.value === value;
+                    select.appendChild(element);
+                });
+
+                select.addEventListener('change', function () {
+                    onChange(this.value);
+                });
+                return select;
+            }
+
+            function rtveCatalogFilters() {
+                var catalog = RtvePlayConfig.catalog;
+                var bar = rtveElement('div', 'rtveFilters');
+
+                var text = rtveElement('input', 'emby-input rtveFilterText');
+                text.id = 'RtveCatalogFilterText';
+                text.type = 'text';
+                text.placeholder = 'Título, id, tipo o género';
+                text.value = catalog.filter;
+                text.addEventListener('input', function () {
+                    catalog.filter = this.value;
+                    rtveRenderCatalogRows();
+                });
+                bar.appendChild(rtveFilterField('Filtrar', text));
+
+                var kinds = rtveCatalogValues(function (item) {
+                    var kind = rtveCatalogKind(item);
+                    return kind ? [kind] : [];
+                });
+                bar.appendChild(rtveFilterField('Tipo', rtveFilterSelect(
+                    'RtveCatalogKindFilter',
+                    catalog.kind,
+                    kinds,
+                    'Todos los tipos',
+                    function (value) {
+                        catalog.kind = value;
+                        rtveRenderCatalogRows();
+                    })));
+
+                bar.appendChild(rtveFilterField('Género', rtveFilterSelect(
+                    'RtveCatalogGenreFilter',
+                    catalog.genre,
+                    rtveCatalogValues(rtveCatalogGenres),
+                    'Todos los géneros',
+                    function (value) {
+                        catalog.genre = value;
+                        rtveRenderCatalogRows();
+                    })));
+
+                var hideAdded = rtveCheckbox();
+                hideAdded.id = 'RtveCatalogHideAdded';
+                hideAdded.checked = catalog.hideAdded;
+                hideAdded.addEventListener('change', function () {
+                    catalog.hideAdded = this.checked;
+                    rtveRenderCatalogRows();
+                });
+                var hideLabel = rtveElement('label', 'emby-checkbox-label');
+                hideLabel.appendChild(hideAdded);
+                hideLabel.appendChild(rtveElement('span', '', 'Ocultar los ya añadidos'));
+                var hideField = rtveElement('div', 'rtveFilterField rtveFilterToggle');
+                hideField.appendChild(hideLabel);
+                bar.appendChild(hideField);
+
+                var clear = rtveElement('button', 'emby-button raised', 'Limpiar filtros');
+                clear.type = 'button';
+                clear.disabled = !catalog.filter && !catalog.kind && !catalog.genre && !catalog.hideAdded;
+                clear.addEventListener('click', function () {
+                    catalog.filter = '';
+                    catalog.kind = '';
+                    catalog.genre = '';
+                    catalog.hideAdded = false;
+                    rtveRenderCatalog();
+                });
+                var clearField = rtveElement('div', 'rtveFilterField rtveFilterToggle');
+                clearField.appendChild(clear);
+                bar.appendChild(clearField);
+
+                return bar;
+            }
+
+            function rtveSortableHeader(label, key) {
+                var catalog = RtvePlayConfig.catalog;
+                var cell = rtveElement('th', 'rtveSortable', label);
+                var mark = rtveElement('span', 'rtveSortMark');
+                cell.appendChild(mark);
+                cell.tabIndex = 0;
+                cell.title = 'Ordenar por «' + label + '»';
+                cell.addEventListener('click', function () {
+                    rtveSortCatalog(key);
+                });
+                cell.addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        rtveSortCatalog(key);
+                    }
+                });
+
+                catalog.headerCells[key] = { cell: cell, mark: mark };
+                return cell;
+            }
+
+            function rtveSortCatalog(key) {
+                var catalog = RtvePlayConfig.catalog;
+                if (catalog.sort === key) {
+                    catalog.dir = -catalog.dir;
+                } else {
+                    catalog.sort = key;
+                    catalog.dir = 1;
+                }
+
+                rtveUpdateSortMarks();
+                rtveRenderCatalogRows();
+            }
+
+            function rtveUpdateSortMarks() {
+                var catalog = RtvePlayConfig.catalog;
+
+                Object.keys(catalog.headerCells || {}).forEach(function (key) {
+                    var sorted = key === catalog.sort;
+                    var header = catalog.headerCells[key];
+                    header.mark.textContent = sorted ? (catalog.dir > 0 ? '▲' : '▼') : '';
+                    header.cell.setAttribute('aria-sort', sorted
+                        ? (catalog.dir > 0 ? 'ascending' : 'descending')
+                        : 'none');
+                });
+            }
+
+            function rtveSelectAllCell() {
+                var catalog = RtvePlayConfig.catalog;
+                var cell = rtveElement('th', 'rtveCellCheck');
+                var label = rtveElement('label', 'emby-checkbox-label');
+                var checkbox = rtveCheckbox();
+                checkbox.id = 'RtveCatalogSelectAll';
+                checkbox.title = 'Seleccionar los programas visibles';
+                checkbox.addEventListener('change', function () {
+                    var value = this.checked;
+                    rtveCatalogVisibleItems().forEach(function (item) {
+                        var itemId = rtveCatalogId(item);
+                        if (!rtveCatalogIsAdded(itemId)) {
+                            catalog.selected[itemId] = value;
+                        }
+                    });
+                    rtveRenderCatalogRows();
+                });
+                label.appendChild(checkbox);
+                label.appendChild(rtveElement('span', ''));
+                cell.appendChild(label);
+                catalog.selectAll = checkbox;
+                return cell;
+            }
+
+            function rtveCatalogRow(item) {
+                var catalog = RtvePlayConfig.catalog;
+                var id = rtveCatalogId(item);
+                var title = rtveCatalogTitle(item);
+                var added = rtveCatalogIsAdded(id);
+                var row = rtveElement('tr', added ? 'rtveRowAdded' : '');
+
+                var checkCell = rtveElement('td', 'rtveCellCheck');
+                var checkLabel = rtveElement('label', 'emby-checkbox-label');
+                var checkbox = rtveCheckbox();
+                checkbox.checked = added || catalog.selected[id] === true;
+                checkbox.disabled = added;
+                checkbox.title = added ? 'Ya está en la lista' : 'Seleccionar «' + title + '»';
+                checkbox.addEventListener('change', function () {
+                    catalog.selected[id] = this.checked;
+                    rtveUpdateCatalogSelection();
+                });
+                checkLabel.appendChild(checkbox);
+                checkLabel.appendChild(rtveElement('span', ''));
+                checkCell.appendChild(checkLabel);
+                row.appendChild(checkCell);
+
+                var titleCell = rtveElement('td', 'rtveCellTitle' + (added ? ' rtveMuted' : ''), title);
+                if (added) {
+                    titleCell.appendChild(rtveElement('span', '', ' · ya añadido'));
+                }
+                row.appendChild(titleCell);
+
+                row.appendChild(rtveElement('td', 'rtveCellId', id));
+
+                var kind = rtveCatalogKind(item);
+                var type = rtveCatalogType(item);
+                var kindCell = rtveElement('td', 'rtveCellKind');
+                kindCell.appendChild(rtveElement('span', kind ? '' : 'rtveMuted', kind || '—'));
+                if (type && rtveFold(type) !== rtveFold(kind)) {
+                    kindCell.appendChild(rtveElement('div', 'rtveMuted rtveCellType', type));
+                }
+                row.appendChild(kindCell);
+
+                var genres = rtveCatalogGenres(item);
+                row.appendChild(rtveElement(
+                    'td',
+                    'rtveCellGenres' + (genres.length ? '' : ' rtveMuted'),
+                    genres.length ? genres.join(', ') : '—'));
+
+                return row;
+            }
+
+            function rtveRenderCatalogRows() {
+                var catalog = RtvePlayConfig.catalog;
+                if (!catalog.body) {
+                    return;
+                }
+
+                catalog.body.innerHTML = '';
+                var items = rtveCatalogVisibleItems();
+
+                if (items.length === 0) {
+                    var emptyRow = rtveElement('tr');
+                    var emptyCell = rtveElement(
+                        'td',
+                        'rtveTableEmpty rtveMuted',
+                        'Ningún programa de esta página coincide con los filtros.');
+                    emptyCell.colSpan = 5;
+                    emptyRow.appendChild(emptyCell);
+                    catalog.body.appendChild(emptyRow);
+                } else {
+                    items.forEach(function (item) {
+                        catalog.body.appendChild(rtveCatalogRow(item));
+                    });
+                }
+
+                rtveUpdateCatalogSelection();
+            }
+
+            function rtveUpdateCatalogSelection() {
+                var catalog = RtvePlayConfig.catalog;
+                var visible = rtveCatalogVisibleItems();
+                var selectableVisible = visible.filter(function (item) {
+                    return !rtveCatalogIsAdded(rtveCatalogId(item));
+                });
+                var selectedVisible = selectableVisible.filter(function (item) {
+                    return catalog.selected[rtveCatalogId(item)] === true;
+                }).length;
+
+                // The selection survives filtering, so the counters and the button work on every
+                // ticked row of the page, not only on the rows that are visible right now.
+                var selected = catalog.items.filter(function (item) {
+                    var itemId = rtveCatalogId(item);
+                    return catalog.selected[itemId] === true && !rtveCatalogIsAdded(itemId);
+                }).length;
+
+                if (catalog.selectAll) {
+                    catalog.selectAll.checked = selectableVisible.length > 0
+                        && selectedVisible === selectableVisible.length;
+                    catalog.selectAll.disabled = selectableVisible.length === 0;
+                    catalog.selectAll.indeterminate = selectedVisible > 0
+                        && selectedVisible < selectableVisible.length;
+                }
+
+                if (catalog.addButton) {
+                    catalog.addButton.disabled = selected === 0;
+                    catalog.addButton.textContent = 'Añadir seleccionados (' + selected + ')';
+                }
+
+                if (catalog.countLabel) {
+                    var count = 'Mostrando ' + visible.length + ' de ' + catalog.items.length
+                        + ' programas de esta página';
+                    if (selected > 0) {
+                        count += ' · ' + selected + ' seleccionado' + (selected === 1 ? '' : 's');
+                    }
+                    catalog.countLabel.textContent = count;
+                }
+            }
+
+            function rtveCatalogPager() {
+                var catalog = RtvePlayConfig.catalog;
+                var pager = rtveElement('div', 'rtveCatalogPager');
+
+                var previous = rtveElement('button', 'emby-button raised rtvePagerButton', 'Anterior');
+                previous.type = 'button';
+                previous.disabled = catalog.page <= 1;
+                previous.addEventListener('click', function () {
+                    rtveLoadCatalog(catalog.query, catalog.page - 1);
+                });
+                pager.appendChild(previous);
+
+                pager.appendChild(rtveElement(
+                    'span',
+                    'rtvePagerText',
+                    'Página ' + catalog.page + ' de ' + catalog.totalPages));
+
+                var next = rtveElement('button', 'emby-button raised rtvePagerButton', 'Siguiente');
+                next.type = 'button';
+                next.disabled = !catalog.hasMore;
+                next.addEventListener('click', function () {
+                    rtveLoadCatalog(catalog.query, catalog.page + 1);
+                });
+                pager.appendChild(next);
+
+                return pager;
+            }
+
             // RTVE mixes radio and TV programs in the same catalog and only video programs can be
             // mirrored, so a page shows fewer rows than entries the API reported.
             function rtveCatalogCaption() {
                 var catalog = RtvePlayConfig.catalog;
-                var caption = 'Página ' + catalog.page + ' de ' + catalog.totalPages
-                    + ' · ' + catalog.items.length + ' programas de vídeo en esta página';
+                var caption = catalog.items.length + ' programas de vídeo en esta página'
+                    + ' · los filtros se aplican a la página cargada';
 
                 if (catalog.query) {
                     return caption + ' · búsqueda «' + catalog.query + '»';
@@ -517,90 +1123,67 @@
                 var container = document.querySelector('#RtveCatalog');
                 var catalog = RtvePlayConfig.catalog;
                 container.innerHTML = '';
+                catalog.headerCells = {};
+                catalog.selectAll = null;
+                catalog.addButton = null;
+                catalog.countLabel = null;
+                catalog.body = null;
 
                 if (!catalog.items.length) {
                     return;
                 }
+
+                rtveResetUnavailableFilters();
 
                 container.appendChild(rtveElement(
                     'h3',
                     'sectionTitle',
                     catalog.query ? 'Programas que coinciden con «' + catalog.query + '»' : 'Todos los programas'));
 
-                var selectedCount = Object.keys(catalog.selected).filter(function (id) {
-                    return catalog.selected[id];
-                }).length;
-
-                var selectable = catalog.items.filter(function (item) {
-                    return !rtveCatalogIsAdded(rtveField(item, 'id'));
-                });
-
-                var allSelected = selectable.length > 0 && selectable.every(function (item) {
-                    return catalog.selected[rtveField(item, 'id')] === true;
-                });
-
-                container.appendChild(rtveCheckboxRow(
-                    'Seleccionar la página (' + catalog.items.length + ')',
-                    '',
-                    allSelected,
-                    selectable.length === 0,
-                    function () {
-                        var value = this.checked;
-                        selectable.forEach(function (item) {
-                            catalog.selected[rtveField(item, 'id')] = value;
-                        });
-                        rtveRenderCatalog();
-                    }));
+                container.appendChild(rtveCatalogFilters());
 
                 var addButton = rtveElement(
                     'button',
                     'emby-button raised button-submit block',
-                    'Añadir seleccionados (' + selectedCount + ')');
+                    'Añadir seleccionados (0)');
                 addButton.type = 'button';
-                addButton.disabled = selectedCount === 0;
+                addButton.disabled = true;
                 addButton.addEventListener('click', rtveAddSelected);
+                catalog.addButton = addButton;
                 container.appendChild(addButton);
 
-                catalog.items.forEach(function (item) {
-                    var id = rtveField(item, 'id');
-                    var title = rtveField(item, 'title') || id;
-                    var added = rtveCatalogIsAdded(id);
+                var countLabel = rtveElement('div', 'fieldDescription');
+                catalog.countLabel = countLabel;
+                container.appendChild(countLabel);
 
-                    container.appendChild(rtveCheckboxRow(
-                        title,
-                        added ? 'id ' + id + ' · ya añadido' : 'id ' + id,
-                        added || catalog.selected[id] === true,
-                        added,
-                        function () {
-                            catalog.selected[id] = this.checked;
-                            rtveRenderCatalog();
-                        }));
-                });
+                var wrap = rtveElement('div', 'rtveTableWrap');
+                var table = rtveElement('table', 'rtveTable');
+                var head = rtveElement('thead');
+                var headRow = rtveElement('tr');
+                headRow.appendChild(rtveSelectAllCell());
+                headRow.appendChild(rtveSortableHeader('Nombre', 'title'));
+                headRow.appendChild(rtveSortableHeader('Id', 'id'));
+                headRow.appendChild(rtveSortableHeader('Tipo', 'kind'));
+                headRow.appendChild(rtveSortableHeader('Género', 'genre'));
+                head.appendChild(headRow);
+                table.appendChild(head);
+
+                var body = rtveElement('tbody');
+                catalog.body = body;
+                table.appendChild(body);
+
+                wrap.appendChild(table);
+                container.appendChild(wrap);
 
                 container.appendChild(rtveElement(
                     'div',
                     'fieldDescription',
                     rtveCatalogCaption()));
 
-                var pager = rtveElement('div', '');
+                container.appendChild(rtveCatalogPager());
 
-                var previous = rtveElement('button', 'emby-button raised block', 'Anterior');
-                previous.type = 'button';
-                previous.disabled = catalog.page <= 1;
-                previous.addEventListener('click', function () {
-                    rtveLoadCatalog(catalog.query, catalog.page - 1);
-                });
-                pager.appendChild(previous);
-
-                var next = rtveElement('button', 'emby-button raised block', 'Siguiente');
-                next.type = 'button';
-                next.disabled = !catalog.hasMore;
-                next.addEventListener('click', function () {
-                    rtveLoadCatalog(catalog.query, catalog.page + 1);
-                });
-                pager.appendChild(next);
-
-                container.appendChild(pager);
+                rtveUpdateSortMarks();
+                rtveRenderCatalogRows();
             }
 
             function rtveAddSelected() {
@@ -608,12 +1191,12 @@
                 var added = 0;
 
                 catalog.items.forEach(function (item) {
-                    var id = rtveField(item, 'id');
+                    var id = rtveCatalogId(item);
                     if (catalog.selected[id] !== true || rtveCatalogIsAdded(id)) {
                         return;
                     }
 
-                    RtvePlayConfig.programs.push({ Id: id, Title: rtveField(item, 'title') || id });
+                    RtvePlayConfig.programs.push({ Id: id, Title: rtveCatalogTitle(item) });
                     added++;
                 });
 

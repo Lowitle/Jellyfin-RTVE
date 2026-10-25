@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jellyfin.Plugin.RtvePlay.Library;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.RtvePlay.Rtve;
@@ -66,6 +67,32 @@ public sealed partial class RtveClient
     }
 
     /// <summary>
+    /// Projects a program read from the RTVE API into the entry exposed by the plugin API, so the
+    /// configuration page can show the kind of content and the genres without a request per program.
+    /// </summary>
+    /// <param name="program">Program read from the RTVE API.</param>
+    /// <returns>The catalog entry.</returns>
+    internal static RtveProgramSummary ToSummary(RtveProgram program)
+    {
+        var id = program.Id ?? string.Empty;
+
+        var genres = (program.Genres ?? [])
+            .Select(genre => HtmlText.FromHtml(genre.Name))
+            .OfType<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new RtveProgramSummary(
+            id,
+            program.Title ?? id,
+            program.HtmlUrl,
+            program.PosterImage,
+            ProgramClassifier.ResolveKind(program.ProgramTypeId, program.ProgramType),
+            HtmlText.FromHtml(program.ProgramType),
+            genres);
+    }
+
+    /// <summary>
     /// Searches the program catalog by title.
     /// </summary>
     /// <param name="query">Text to search (empty to list the first programs).</param>
@@ -115,7 +142,7 @@ public sealed partial class RtveClient
                     continue;
                 }
 
-                results.Add(new RtveProgramSummary(program.Id, title, program.HtmlUrl, program.PosterImage));
+                results.Add(ToSummary(program));
                 if (results.Count >= limit)
                 {
                     break;
@@ -175,11 +202,7 @@ public sealed partial class RtveClient
 
         var programs = (resultPage?.Items ?? [])
             .Where(program => program.Id is not null && IsVideoProgram(program.HtmlUrl))
-            .Select(program => new RtveProgramSummary(
-                program.Id!,
-                program.Title ?? program.Id!,
-                program.HtmlUrl,
-                program.PosterImage))
+            .Select(ToSummary)
             .ToList();
 
         var totalPages = Math.Max(1, resultPage?.TotalPages ?? 1);
