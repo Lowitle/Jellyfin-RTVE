@@ -92,6 +92,11 @@
                 background: rgba(128, 128, 128, 0.12);
             }
 
+            /* Radio programs: listed for reference, but they have no videos to mirror. */
+            #RtvePlayConfigPage .rtveTable tbody tr.rtveRowNoVideo {
+                background: rgba(128, 128, 128, 0.06);
+            }
+
             #RtvePlayConfigPage .rtveTable .rtveCellCheck {
                 width: 2.2em;
                 padding-right: 0;
@@ -353,6 +358,23 @@
             </div>
         </div>
         <script type="text/javascript">
+            // Sections of the library (ProgramSections in the plugin). The «Tipo» filter and the
+            // «Tipo» column use the folder the sync writes every program to, so filtering the catalog
+            // and browsing the destination folder mean the same thing.
+            var RtveCatalogSections = [
+                { value: 'peliculas', label: 'Películas' },
+                { value: 'series-de-tv', label: 'Series de TV' },
+                { value: 'documentales', label: 'Documentales' },
+                { value: 'magacines', label: 'Magacines' },
+                { value: 'programas-de-tv', label: 'Programas de TV' },
+                { value: 'noticias', label: 'Noticias' },
+                { value: 'infantil', label: 'Infantil' },
+                { value: 'anime', label: 'Anime' },
+                { value: 'podcast', label: 'Podcast' },
+                { value: 'archivo', label: 'Archivo' },
+                { value: 'otros', label: 'Otros' }
+            ];
+
             var RtvePlayConfig = {
                 pluginId: '3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913',
                 taskKey: 'RtvePlayRefresh',
@@ -369,8 +391,9 @@
                     // Table state: it survives the re-renders, so filtering or sorting never loses
                     // the programs already ticked.
                     filter: '',
-                    kind: '',
+                    section: '',
                     genre: '',
+                    onlyVideo: true,
                     hideAdded: false,
                     sort: 'title',
                     dir: 1,
@@ -636,6 +659,31 @@
                 return rtveClean(rtveField(item, 'kind'));
             }
 
+            // Folder of the program: the server resolves it with the same rules the sync uses, so the
+            // «Tipo» filter and the destination folder of a series always agree.
+            function rtveCatalogSection(item) {
+                return rtveFold(rtveField(item, 'section')).replace(/\s+/g, '-');
+            }
+
+            function rtveCatalogSectionLabel(item) {
+                var section = rtveCatalogSection(item);
+
+                for (var index = 0; index < RtveCatalogSections.length; index++) {
+                    if (RtveCatalogSections[index].value === section) {
+                        return RtveCatalogSections[index].label;
+                    }
+                }
+
+                return '';
+            }
+
+            // RTVE publishes the radio programs in the same catalog as the television ones. They are
+            // listed and flagged when the «Solo con vídeos» filter is off, but they cannot be added
+            // because they have no videos to mirror.
+            function rtveCatalogHasVideo(item) {
+                return rtveField(item, 'hasVideo') !== false;
+            }
+
             function rtveCatalogType(item) {
                 return rtveClean(rtveField(item, 'programType'));
             }
@@ -655,8 +703,8 @@
                 switch (key) {
                     case 'id':
                         return rtveCatalogId(item);
-                    case 'kind':
-                        return rtveCatalogKind(item);
+                    case 'section':
+                        return rtveCatalogSectionLabel(item) || rtveCatalogKind(item);
                     case 'genre':
                         return rtveCatalogGenres(item).join(', ');
                     default:
@@ -686,7 +734,8 @@
             }
 
             // The filters work on the programs of the loaded page: the RTVE API pages the catalog
-            // server side, so there is nothing else to filter.
+            // server side and every page holds the same number of programs, so filtering only hides
+            // rows of the page instead of changing how many programs it has.
             function rtveCatalogVisibleItems() {
                 var catalog = RtvePlayConfig.catalog;
                 var text = rtveFold(catalog.filter);
@@ -696,7 +745,10 @@
                     if (catalog.hideAdded && rtveCatalogIsAdded(id)) {
                         return false;
                     }
-                    if (catalog.kind && rtveCatalogKind(item) !== catalog.kind) {
+                    if (catalog.onlyVideo && !rtveCatalogHasVideo(item)) {
+                        return false;
+                    }
+                    if (catalog.section && rtveCatalogSection(item) !== catalog.section) {
                         return false;
                     }
                     if (catalog.genre && rtveCatalogGenres(item).indexOf(catalog.genre) < 0) {
@@ -709,6 +761,7 @@
                     var haystack = [
                         rtveCatalogTitle(item),
                         id,
+                        rtveCatalogSectionLabel(item),
                         rtveCatalogKind(item),
                         rtveCatalogType(item),
                         rtveCatalogGenres(item).join(' ')
@@ -742,18 +795,11 @@
                 return values;
             }
 
-            // A filter left over from the previous page would hide every row and the combo would not
-            // be able to show it, so filters that no longer match anything are dropped on load.
+            // The «Tipo» filter is a fixed list, so it survives a page change even when the loaded page
+            // has no program of that section. The genres come from the page, so one left over from the
+            // previous page would hide every row and the combo could not even show it.
             function rtveResetUnavailableFilters() {
                 var catalog = RtvePlayConfig.catalog;
-                var kinds = rtveCatalogValues(function (item) {
-                    var kind = rtveCatalogKind(item);
-                    return kind ? [kind] : [];
-                });
-
-                if (catalog.kind && kinds.indexOf(catalog.kind) < 0) {
-                    catalog.kind = '';
-                }
 
                 if (catalog.genre && rtveCatalogValues(rtveCatalogGenres).indexOf(catalog.genre) < 0) {
                     catalog.genre = '';
@@ -769,13 +815,23 @@
                 return field;
             }
 
-            function rtveFilterSelect(id, value, values, allLabel, onChange) {
+            function rtveFilterCheckbox(checkbox, labelText) {
+                var label = rtveElement('label', 'emby-checkbox-label');
+                label.appendChild(checkbox);
+                label.appendChild(rtveElement('span', '', labelText));
+
+                var field = rtveElement('div', 'rtveFilterField rtveFilterToggle');
+                field.appendChild(label);
+                return field;
+            }
+
+            // Every option is a { value, label } pair: the value what the table is filtered by and the
+            // label what the user reads («Películas (2)»).
+            function rtveFilterSelect(id, value, options, allLabel, onChange) {
                 var select = rtveElement('select', 'rtveSelect');
                 select.id = id;
 
-                [{ value: '', label: allLabel }].concat(values.map(function (option) {
-                    return { value: option, label: option };
-                })).forEach(function (option) {
+                [{ value: '', label: allLabel }].concat(options).forEach(function (option) {
                     var element = rtveElement('option', '', option.label);
                     element.value = option.value;
                     element.selected = option.value === value;
@@ -786,6 +842,20 @@
                     onChange(this.value);
                 });
                 return select;
+            }
+
+            // The sections are always listed, with the number of programs of the loaded page, so
+            // «Películas» is in the combo even when the page has none.
+            function rtveCatalogSectionOptions() {
+                var items = RtvePlayConfig.catalog.items;
+
+                return RtveCatalogSections.map(function (section) {
+                    var count = items.filter(function (item) {
+                        return rtveCatalogSection(item) === section.value;
+                    }).length;
+
+                    return { value: section.value, label: section.label + ' (' + count + ')' };
+                });
             }
 
             function rtveCatalogFilters() {
@@ -803,29 +873,37 @@
                 });
                 bar.appendChild(rtveFilterField('Filtrar', text));
 
-                var kinds = rtveCatalogValues(function (item) {
-                    var kind = rtveCatalogKind(item);
-                    return kind ? [kind] : [];
-                });
                 bar.appendChild(rtveFilterField('Tipo', rtveFilterSelect(
-                    'RtveCatalogKindFilter',
-                    catalog.kind,
-                    kinds,
+                    'RtveCatalogSectionFilter',
+                    catalog.section,
+                    rtveCatalogSectionOptions(),
                     'Todos los tipos',
                     function (value) {
-                        catalog.kind = value;
+                        catalog.section = value;
                         rtveRenderCatalogRows();
                     })));
 
                 bar.appendChild(rtveFilterField('Género', rtveFilterSelect(
                     'RtveCatalogGenreFilter',
                     catalog.genre,
-                    rtveCatalogValues(rtveCatalogGenres),
+                    rtveCatalogValues(rtveCatalogGenres).map(function (genre) {
+                        return { value: genre, label: genre };
+                    }),
                     'Todos los géneros',
                     function (value) {
                         catalog.genre = value;
                         rtveRenderCatalogRows();
                     })));
+
+                var onlyVideo = rtveCheckbox();
+                onlyVideo.id = 'RtveCatalogOnlyVideo';
+                onlyVideo.checked = catalog.onlyVideo;
+                onlyVideo.title = 'Oculta los programas de radio, que no tienen vídeos que replicar';
+                onlyVideo.addEventListener('change', function () {
+                    catalog.onlyVideo = this.checked;
+                    rtveRenderCatalogRows();
+                });
+                bar.appendChild(rtveFilterCheckbox(onlyVideo, 'Solo con vídeos'));
 
                 var hideAdded = rtveCheckbox();
                 hideAdded.id = 'RtveCatalogHideAdded';
@@ -834,21 +912,18 @@
                     catalog.hideAdded = this.checked;
                     rtveRenderCatalogRows();
                 });
-                var hideLabel = rtveElement('label', 'emby-checkbox-label');
-                hideLabel.appendChild(hideAdded);
-                hideLabel.appendChild(rtveElement('span', '', 'Ocultar los ya añadidos'));
-                var hideField = rtveElement('div', 'rtveFilterField rtveFilterToggle');
-                hideField.appendChild(hideLabel);
-                bar.appendChild(hideField);
+                bar.appendChild(rtveFilterCheckbox(hideAdded, 'Ocultar los ya añadidos'));
 
                 var clear = rtveElement('button', 'emby-button raised', 'Limpiar filtros');
                 clear.type = 'button';
-                clear.disabled = !catalog.filter && !catalog.kind && !catalog.genre && !catalog.hideAdded;
+                clear.disabled = !catalog.filter && !catalog.section && !catalog.genre
+                    && !catalog.hideAdded && catalog.onlyVideo;
                 clear.addEventListener('click', function () {
                     catalog.filter = '';
-                    catalog.kind = '';
+                    catalog.section = '';
                     catalog.genre = '';
                     catalog.hideAdded = false;
+                    catalog.onlyVideo = true;
                     rtveRenderCatalog();
                 });
                 var clearField = rtveElement('div', 'rtveFilterField rtveFilterToggle');
@@ -916,7 +991,7 @@
                     var value = this.checked;
                     rtveCatalogVisibleItems().forEach(function (item) {
                         var itemId = rtveCatalogId(item);
-                        if (!rtveCatalogIsAdded(itemId)) {
+                        if (rtveCatalogHasVideo(item) && !rtveCatalogIsAdded(itemId)) {
                             catalog.selected[itemId] = value;
                         }
                     });
@@ -934,14 +1009,19 @@
                 var id = rtveCatalogId(item);
                 var title = rtveCatalogTitle(item);
                 var added = rtveCatalogIsAdded(id);
-                var row = rtveElement('tr', added ? 'rtveRowAdded' : '');
+                var hasVideo = rtveCatalogHasVideo(item);
+                var row = rtveElement('tr', added ? 'rtveRowAdded' : (hasVideo ? '' : 'rtveRowNoVideo'));
 
                 var checkCell = rtveElement('td', 'rtveCellCheck');
                 var checkLabel = rtveElement('label', 'emby-checkbox-label');
                 var checkbox = rtveCheckbox();
                 checkbox.checked = added || catalog.selected[id] === true;
-                checkbox.disabled = added;
-                checkbox.title = added ? 'Ya está en la lista' : 'Seleccionar «' + title + '»';
+                checkbox.disabled = added || !hasVideo;
+                checkbox.title = added
+                    ? 'Ya está en la lista'
+                    : (hasVideo
+                        ? 'Seleccionar «' + title + '»'
+                        : 'Programa de radio: no tiene vídeos que replicar');
                 checkbox.addEventListener('change', function () {
                     catalog.selected[id] = this.checked;
                     rtveUpdateCatalogSelection();
@@ -951,7 +1031,10 @@
                 checkCell.appendChild(checkLabel);
                 row.appendChild(checkCell);
 
-                var titleCell = rtveElement('td', 'rtveCellTitle' + (added ? ' rtveMuted' : ''), title);
+                var titleCell = rtveElement(
+                    'td',
+                    'rtveCellTitle' + (added || !hasVideo ? ' rtveMuted' : ''),
+                    title);
                 if (added) {
                     titleCell.appendChild(rtveElement('span', '', ' · ya añadido'));
                 }
@@ -959,12 +1042,22 @@
 
                 row.appendChild(rtveElement('td', 'rtveCellId', id));
 
+                var section = rtveCatalogSectionLabel(item);
                 var kind = rtveCatalogKind(item);
                 var type = rtveCatalogType(item);
+                var main = section || kind;
                 var kindCell = rtveElement('td', 'rtveCellKind');
-                kindCell.appendChild(rtveElement('span', kind ? '' : 'rtveMuted', kind || '—'));
-                if (type && rtveFold(type) !== rtveFold(kind)) {
-                    kindCell.appendChild(rtveElement('div', 'rtveMuted rtveCellType', type));
+                kindCell.appendChild(rtveElement('span', main ? '' : 'rtveMuted', main || '—'));
+
+                var detail = [];
+                if (type && rtveFold(type) !== rtveFold(main)) {
+                    detail.push(type);
+                }
+                if (!hasVideo) {
+                    detail.push('sin vídeos');
+                }
+                if (detail.length) {
+                    kindCell.appendChild(rtveElement('div', 'rtveMuted rtveCellType', detail.join(' · ')));
                 }
                 row.appendChild(kindCell);
 
@@ -987,11 +1080,15 @@
                 var items = rtveCatalogVisibleItems();
 
                 if (items.length === 0) {
+                    var emptyText = 'Ningún programa de esta página coincide con los filtros.';
+                    if (catalog.onlyVideo && catalog.items.some(function (item) {
+                        return !rtveCatalogHasVideo(item);
+                    })) {
+                        emptyText += ' Quita «Solo con vídeos» para ver también los programas de radio.';
+                    }
+
                     var emptyRow = rtveElement('tr');
-                    var emptyCell = rtveElement(
-                        'td',
-                        'rtveTableEmpty rtveMuted',
-                        'Ningún programa de esta página coincide con los filtros.');
+                    var emptyCell = rtveElement('td', 'rtveTableEmpty rtveMuted', emptyText);
                     emptyCell.colSpan = 5;
                     emptyRow.appendChild(emptyCell);
                     catalog.body.appendChild(emptyRow);
@@ -1008,7 +1105,7 @@
                 var catalog = RtvePlayConfig.catalog;
                 var visible = rtveCatalogVisibleItems();
                 var selectableVisible = visible.filter(function (item) {
-                    return !rtveCatalogIsAdded(rtveCatalogId(item));
+                    return rtveCatalogHasVideo(item) && !rtveCatalogIsAdded(rtveCatalogId(item));
                 });
                 var selectedVisible = selectableVisible.filter(function (item) {
                     return catalog.selected[rtveCatalogId(item)] === true;
@@ -1018,7 +1115,9 @@
                 // ticked row of the page, not only on the rows that are visible right now.
                 var selected = catalog.items.filter(function (item) {
                     var itemId = rtveCatalogId(item);
-                    return catalog.selected[itemId] === true && !rtveCatalogIsAdded(itemId);
+                    return catalog.selected[itemId] === true
+                        && rtveCatalogHasVideo(item)
+                        && !rtveCatalogIsAdded(itemId);
                 }).length;
 
                 if (catalog.selectAll) {
@@ -1072,19 +1171,24 @@
                 return pager;
             }
 
-            // RTVE mixes radio and TV programs in the same catalog and only video programs can be
-            // mirrored, so a page shows fewer rows than entries the API reported.
+            // RTVE pages the catalog server side, so a page always holds the same number of programs and
+            // the filters only hide rows of the loaded page. The radio programs are part of the same
+            // catalog: the «Solo con vídeos» filter is the one that hides them.
             function rtveCatalogCaption() {
                 var catalog = RtvePlayConfig.catalog;
-                var caption = catalog.items.length + ' programas de vídeo en esta página'
+                var caption = catalog.items.length + ' programas en esta página'
                     + ' · los filtros se aplican a la página cargada';
+
+                if (catalog.onlyVideo) {
+                    caption += ' · ocultos los programas de radio';
+                }
 
                 if (catalog.query) {
                     return caption + ' · búsqueda «' + catalog.query + '»';
                 }
 
                 return caption + ' · RTVE mezcla radio y televisión en el catálogo (' + catalog.totalItems
-                    + ' entradas); los programas de radio no se muestran';
+                    + ' entradas)';
             }
 
             function rtveLoadCatalog(query, page) {
@@ -1163,7 +1267,7 @@
                 headRow.appendChild(rtveSelectAllCell());
                 headRow.appendChild(rtveSortableHeader('Nombre', 'title'));
                 headRow.appendChild(rtveSortableHeader('Id', 'id'));
-                headRow.appendChild(rtveSortableHeader('Tipo', 'kind'));
+                headRow.appendChild(rtveSortableHeader('Tipo', 'section'));
                 headRow.appendChild(rtveSortableHeader('Género', 'genre'));
                 head.appendChild(headRow);
                 table.appendChild(head);
@@ -1192,7 +1296,7 @@
 
                 catalog.items.forEach(function (item) {
                     var id = rtveCatalogId(item);
-                    if (catalog.selected[id] !== true || rtveCatalogIsAdded(id)) {
+                    if (catalog.selected[id] !== true || !rtveCatalogHasVideo(item) || rtveCatalogIsAdded(id)) {
                         return;
                     }
 

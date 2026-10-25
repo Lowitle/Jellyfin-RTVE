@@ -97,13 +97,17 @@ public sealed class RtvePlayController : ControllerBase
     }
 
     /// <summary>
-    /// Lists the television programs of the RTVE catalog, one page at a time.
+    /// Lists the programs of the RTVE catalog, one page at a time.
     /// </summary>
     /// <param name="query">Title filter (empty to list the whole catalog).</param>
     /// <param name="page">Page number (1 based).</param>
     /// <param name="size">Page size (1-100).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The page of programs, radio programs excluded.</returns>
+    /// <returns>
+    /// The page of programs. The radio programs are included and flagged with
+    /// <see cref="RtveProgramSummary.HasVideo"/> = <c>false</c>, so the page always returns the same
+    /// number of programs and the configuration page is the one that hides them.
+    /// </returns>
     [HttpGet("Programs/List")]
     public async Task<ActionResult<RtveProgramPage>> ListAsync(
         [FromQuery] string? query,

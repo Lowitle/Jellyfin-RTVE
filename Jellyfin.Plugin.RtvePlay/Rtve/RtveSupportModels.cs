@@ -103,6 +103,16 @@ public sealed class RtveSubtitle
 /// </param>
 /// <param name="ProgramType">Type published by RTVE («Magacín semanal», «Serie Documental»...), or <c>null</c>.</param>
 /// <param name="Genres">RTVE categories of the program («Cultura», «Humor»...); may be empty.</param>
+/// <param name="Section">
+/// Folder of the program resolved by <see cref="Jellyfin.Plugin.RtvePlay.Library.ProgramSections"/>
+/// (<c>peliculas</c>, <c>series-de-tv</c>, <c>documentales</c>...), so the configuration page can
+/// filter the catalog by the same sections the library is organized in.
+/// </param>
+/// <param name="HasVideo">
+/// Whether the program page belongs to the video catalog. RTVE publishes the radio programs in the
+/// same feed and only the television ones have videos to mirror, so the page can hide them without
+/// changing the size of a page of the catalog.
+/// </param>
 public sealed record RtveProgramSummary(
     string Id,
     string Title,
@@ -110,7 +120,9 @@ public sealed record RtveProgramSummary(
     string? ImageUrl,
     string? Kind = null,
     string? ProgramType = null,
-    IReadOnlyList<string>? Genres = null);
+    IReadOnlyList<string>? Genres = null,
+    string? Section = null,
+    bool HasVideo = true);
 
 /// <summary>
 /// A page of the RTVE program catalog.

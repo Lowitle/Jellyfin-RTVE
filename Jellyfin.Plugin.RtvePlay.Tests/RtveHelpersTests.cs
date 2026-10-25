@@ -28,13 +28,14 @@ public class RtveHelpersTests
     [Theory]
     [InlineData("https://www.rtve.es/play/videos/saber-vivir/", true)]
     [InlineData("https://www.rtve.es/play/videos/saber-vivir", true)]
+    [InlineData("https://www.rtve.es/play/clan/dragon-ball-daima/", true)]
     [InlineData("https://www.rtve.es/play/audios/y-tu-sin-saberlo/", false)]
     [InlineData("https://www.rtve.es/play/audios/no-necesitaba-saber-esto/", false)]
     [InlineData("", true)]
     [InlineData(null, true)]
-    public void IsVideoProgram_SkipsTheRadioCatalog(string? htmlUrl, bool expected)
+    public void HasVideos_SkipsTheRadioCatalog(string? htmlUrl, bool expected)
     {
-        Assert.Equal(expected, RtveClient.IsVideoProgram(htmlUrl));
+        Assert.Equal(expected, RtveClient.HasVideos(htmlUrl));
     }
 
     [Fact]

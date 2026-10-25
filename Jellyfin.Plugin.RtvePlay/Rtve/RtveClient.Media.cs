@@ -51,30 +51,32 @@ public sealed partial class RtveClient
 
     /// <summary>
     /// Tells whether a program page belongs to the video catalog. RTVE mixes radio
-    /// (<c>/play/audios/</c>) and television (<c>/play/videos/</c>) programs in the same feed and
-    /// only the latter have videos to mirror.
+    /// (<c>/play/audios/</c>) and television in the same feed and only the television programs have
+    /// videos to mirror; the children's catalog (<c>/play/clan/</c>) is television as well.
     /// </summary>
     /// <param name="htmlUrl">Program page URL.</param>
-    /// <returns><c>true</c> when the program is a video program (or the URL is unknown).</returns>
-    internal static bool IsVideoProgram(string? htmlUrl)
+    /// <returns><c>false</c> only for the radio programs.</returns>
+    internal static bool HasVideos(string? htmlUrl)
     {
         if (string.IsNullOrWhiteSpace(htmlUrl))
         {
             return true;
         }
 
-        return htmlUrl.Contains("/play/videos/", StringComparison.OrdinalIgnoreCase);
+        return !htmlUrl.Contains("/play/audios/", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
     /// Projects a program read from the RTVE API into the entry exposed by the plugin API, so the
-    /// configuration page can show the kind of content and the genres without a request per program.
+    /// configuration page can show the section, the kind of content and the genres of every program
+    /// without a request per program.
     /// </summary>
     /// <param name="program">Program read from the RTVE API.</param>
     /// <returns>The catalog entry.</returns>
     internal static RtveProgramSummary ToSummary(RtveProgram program)
     {
         var id = program.Id ?? string.Empty;
+        var title = program.Title ?? id;
 
         var genres = (program.Genres ?? [])
             .Select(genre => HtmlText.FromHtml(genre.Name))
@@ -82,14 +84,20 @@ public sealed partial class RtveClient
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var kind = ProgramClassifier.ResolveKind(program.ProgramTypeId, program.ProgramType);
+
         return new RtveProgramSummary(
             id,
-            program.Title ?? id,
+            title,
             program.HtmlUrl,
             program.PosterImage,
-            ProgramClassifier.ResolveKind(program.ProgramTypeId, program.ProgramType),
+            kind,
             HtmlText.FromHtml(program.ProgramType),
-            genres);
+            genres,
+            // The same resolution the sync uses to pick the subfolder of the library, so the «Tipo»
+            // filter of the page and the folder names of the destination never disagree.
+            ProgramSections.FolderName(ProgramSections.Resolve(kind, program.ProgramType, title)),
+            HasVideos(program.HtmlUrl));
     }
 
     /// <summary>
@@ -99,6 +107,10 @@ public sealed partial class RtveClient
     /// <param name="limit">Maximum number of results.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The matching programs.</returns>
+    /// <remarks>
+    /// The radio programs of the catalog are included as well, so a search never hides a program that
+    /// the table is able to list; the configuration page marks them and hides them by default.
+    /// </remarks>
     public async Task<IReadOnlyList<RtveProgramSummary>> SearchProgramsAsync(
         string query,
         int limit,
@@ -131,11 +143,6 @@ public sealed partial class RtveClient
                 }
 
                 var title = program.Title ?? program.Id;
-                if (!IsVideoProgram(program.HtmlUrl))
-                {
-                    continue;
-                }
-
                 if (!string.IsNullOrWhiteSpace(query)
                     && title.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0)
                 {
@@ -156,14 +163,18 @@ public sealed partial class RtveClient
     }
 
     /// <summary>
-    /// Lists the television programs of the RTVE catalog, one page at a time. Radio programs are
-    /// filtered out because they have no videos to mirror.
+    /// Lists the programs of the RTVE catalog, one page at a time.
     /// </summary>
     /// <param name="query">Title filter (empty to list the whole catalog).</param>
     /// <param name="page">Page number (1 based).</param>
     /// <param name="size">Page size (1-100).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The page of programs.</returns>
+    /// <remarks>
+    /// Every entry RTVE returns is kept, radio included, so a page always holds the same number of
+    /// programs and paging stays stable. Hiding the programs without videos is up to the caller,
+    /// which has <see cref="RtveProgramSummary.HasVideo"/> for that.
+    /// </remarks>
     public async Task<RtveProgramPage> ListProgramsAsync(
         string? query,
         int page,
@@ -201,7 +212,7 @@ public sealed partial class RtveClient
         var resultPage = envelope?.Page;
 
         var programs = (resultPage?.Items ?? [])
-            .Where(program => program.Id is not null && IsVideoProgram(program.HtmlUrl))
+            .Where(program => program.Id is not null)
             .Select(ToSummary)
             .ToList();
 

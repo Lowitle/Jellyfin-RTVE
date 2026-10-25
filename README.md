@@ -21,11 +21,14 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
 
 - **Programas configurables**: se indica el id numérico (`111570`), el slug de la página (`saber-vivir`)
   o la URL completa del programa, y el plugin resuelve el resto.
-- **Catálogo navegable**: el botón **Ver todos los programas** muestra el catálogo paginado de RTVE
-  (solo programas de televisión) en una tabla con las columnas *Nombre*, *Id*, *Tipo* (el tipo
-  normalizado: *Serie*, *Documental*, *Infantil*…) y *Género* (las categorías de RTVE). Se ordena
-  pulsando cualquier cabecera y se filtra por texto, tipo de contenido y género; las casillas añaden
-  varios programas de golpe.
+- **Catálogo navegable**: el botón **Ver todos los programas** muestra el catálogo paginado de RTVE en
+  una tabla con las columnas *Nombre*, *Id*, *Tipo* y *Género*. Cada página trae siempre el mismo número
+  de programas que devuelve RTVE y los filtros solo ocultan filas de la página cargada, así que la
+  paginación no cambia de tamaño. Se ordena pulsando cualquier cabecera y se filtra por texto, por
+  *Tipo* —las mismas carpetas de la biblioteca: *Películas*, *Series de TV*, *Documentales*,
+  *Magacines*, *Programas de TV*, *Noticias*, *Infantil*, *Anime*, *Podcast*, *Archivo* y *Otros*—,
+  por género y con **Solo con vídeos**, que oculta los programas de radio que RTVE mezcla en el mismo
+  catálogo; las casillas añaden varios programas de golpe.
 - **Series y episodios**: agrupa los vídeos de cada programa en una serie, con temporadas y numeración
   de episodios (usa `seasonNumber`/`episode` de RTVE cuando existen y, si no, ordena por fecha).
 - **MP4 progresivo con fallback a HLS**: intenta primero la URL MP4 (`PreferMp4`), lo que permite *seek*
@@ -144,10 +147,13 @@ programa, la etiqueta con el tipo exacto y el id de IMDb en el `tvshow.nfo` (pre
 más la organización de la carpeta de destino en subcarpetas por tipo de programa con la migración
 automática de los programas ya sincronizados. La **1.0.5.0** convierte la selección de programas en una
 tabla ordenable y filtrable (nombre, id, tipo de contenido y género) y unifica la anchura de todas las
-secciones de la página de configuración.
+secciones de la página de configuración. La **1.0.6.0** deja de descartar los programas de radio al
+paginar —cada página trae siempre los mismos 100 programas y los filtros solo ocultan filas—, añade el
+filtro **Solo con vídeos**, convierte el filtro *Tipo* en la lista fija de carpetas de la biblioteca
+(*Películas* incluida) y recupera los programas del catálogo de Clan, que se perdían por error.
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
-publica el tag (`git tag v1.0.5.0; git push origin v1.0.5.0`). El manifiesto y la release se actualizan solos.
+publica el tag (`git tag v1.0.6.0; git push origin v1.0.6.0`). El manifiesto y la release se actualizan solos.
 
 ## Configuración
 
@@ -159,8 +165,8 @@ La página del plugin está en **Panel de control → Plugins → RTVE Play**.
 | --- | --- |
 | **Id, slug o URL del programa** | Acepta `111570`, `saber-vivir` o `https://www.rtve.es/play/videos/saber-vivir/`. |
 | **Añadir programa** | Resuelve la referencia contra la API de RTVE y la guarda con su título. |
-| **Buscar por título** | Filtra el catálogo por ese texto en el panel del listado (solo programas de televisión: los de radio de RTVE Play se descartan). |
-| **Ver todos los programas** | Muestra el catálogo completo **paginado** en una tabla (*Nombre*, *Id*, *Tipo*, *Género*) con cabeceras para ordenar y filtros por texto, tipo de contenido y género. Marca las casillas y pulsa **Añadir seleccionados**; *Anterior* / *Siguiente* cambian de página y «Ocultar los ya añadidos» deja fuera los que ya están en la lista. |
+| **Buscar por título** | Filtra el catálogo por ese texto en el panel del listado (se incluyen los programas de radio, que aparecen marcados y sin casilla para añadirlos). |
+| **Ver todos los programas** | Muestra el catálogo completo **paginado** en una tabla (*Nombre*, *Id*, *Tipo*, *Género*) con cabeceras para ordenar y filtros por texto, tipo (las mismas carpetas de la biblioteca), género y **Solo con vídeos**. Cada página trae los mismos 100 programas que devuelve RTVE y los filtros solo ocultan filas de la página cargada. Marca las casillas y pulsa **Añadir seleccionados**; *Anterior* / *Siguiente* cambian de página y «Ocultar los ya añadidos» deja fuera los que ya están en la lista. |
 
 Los programas ya añadidos aparecen marcados en el listado como *ya añadido* y no se pueden volver a
 seleccionar. Recuerda pulsar **Guardar** al terminar.
@@ -344,8 +350,8 @@ dos episodios comparten título. Los archivos solo se reescriben si el contenido
 
 ```powershell
 dotnet build                     # compila plugin y tests (Jellyfin.Plugin.RtvePlay.sln)
-dotnet test                      # 226 pruebas (xunit)
-pwsh ./package.ps1               # genera dist/rtveplay_1.0.5.0.zip + SHA256
+dotnet test                      # 229 pruebas (xunit)
+pwsh ./package.ps1               # genera dist/rtveplay_1.0.6.0.zip + SHA256
 # Windows PowerShell 5.1: powershell -ExecutionPolicy Bypass -File .\package.ps1
 ```
 
