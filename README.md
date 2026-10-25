@@ -150,10 +150,12 @@ tabla ordenable y filtrable (nombre, id, tipo de contenido y género) y unifica 
 secciones de la página de configuración. La **1.0.6.0** deja de descartar los programas de radio al
 paginar —cada página trae siempre los mismos 100 programas y los filtros solo ocultan filas—, añade el
 filtro **Solo con vídeos**, convierte el filtro *Tipo* en la lista fija de carpetas de la biblioteca
-(*Películas* incluida) y recupera los programas del catálogo de Clan, que se perdían por error.
+(*Películas* incluida) y recupera los programas del catálogo de Clan, que se perdían por error. La
+**1.0.7.0** hace que los recuentos del filtro *Tipo* sigan al filtro **Solo con vídeos**, para que el
+número de cada carpeta coincida con las filas que aparecen al elegirla.
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
-publica el tag (`git tag v1.0.6.0; git push origin v1.0.6.0`). El manifiesto y la release se actualizan solos.
+publica el tag (`git tag v1.0.7.0; git push origin v1.0.7.0`). El manifiesto y la release se actualizan solos.
 
 ## Configuración
 
@@ -351,7 +353,7 @@ dos episodios comparten título. Los archivos solo se reescriben si el contenido
 ```powershell
 dotnet build                     # compila plugin y tests (Jellyfin.Plugin.RtvePlay.sln)
 dotnet test                      # 229 pruebas (xunit)
-pwsh ./package.ps1               # genera dist/rtveplay_1.0.6.0.zip + SHA256
+pwsh ./package.ps1               # genera dist/rtveplay_1.0.7.0.zip + SHA256
 # Windows PowerShell 5.1: powershell -ExecutionPolicy Bypass -File .\package.ps1
 ```
 

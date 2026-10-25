@@ -844,10 +844,13 @@
                 return select;
             }
 
-            // The sections are always listed, with the number of programs of the loaded page, so
-            // «Películas» is in the combo even when the page has none.
+            // The sections are always listed, with the number of programs of the loaded page that
+            // «Solo con vídeos» would show, so «Películas» is in the combo even when the page has none.
             function rtveCatalogSectionOptions() {
-                var items = RtvePlayConfig.catalog.items;
+                var catalog = RtvePlayConfig.catalog;
+                var items = catalog.items.filter(function (item) {
+                    return !catalog.onlyVideo || rtveCatalogHasVideo(item);
+                });
 
                 return RtveCatalogSections.map(function (section) {
                     var count = items.filter(function (item) {
@@ -901,7 +904,8 @@
                 onlyVideo.title = 'Oculta los programas de radio, que no tienen vídeos que replicar';
                 onlyVideo.addEventListener('change', function () {
                     catalog.onlyVideo = this.checked;
-                    rtveRenderCatalogRows();
+                    // The counts of the «Tipo» combo follow this filter, so the whole panel is redrawn.
+                    rtveRenderCatalog();
                 });
                 bar.appendChild(rtveFilterCheckbox(onlyVideo, 'Solo con vídeos'));
 

@@ -1,7 +1,7 @@
 ---
 name: "RTVE Play"
 guid: "3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913"
-version: "1.0.6.0"
+version: "1.0.7.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Crea una biblioteca de series con el catálogo a la carta de RTVE Play (.strm + metadatos + subtítulos)."
@@ -17,7 +17,8 @@ owner: "Lowitle"
 artifacts:
   - "Jellyfin.Plugin.RtvePlay.dll"
 changelog: >
-  1.0.6.0: el catálogo de programas ya no descarta los programas de radio al paginar, así que cada
+  1.0.7.0: los recuentos del filtro «Tipo» siguen al filtro «Solo con vídeos», así que el número que
+  muestra cada carpeta coincide con las filas que aparecen al elegirla. 1.0.6.0: el catálogo de programas ya no descarta los programas de radio al paginar, así que cada
   página trae siempre el mismo número de programas que devuelve RTVE y los filtros solo ocultan filas
   de la página cargada; el filtro «Tipo» pasa a ser la lista fija de las carpetas de la biblioteca
   (Películas, Series de TV, Documentales, Magacines, Programas de TV, Noticias, Infantil, Anime,
