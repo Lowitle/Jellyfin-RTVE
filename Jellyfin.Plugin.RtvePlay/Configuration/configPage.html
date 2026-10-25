@@ -43,12 +43,16 @@
                             <div class="fieldDescription">
                                 Ruta absoluta, tal y como la ve el servidor Jellyfin, donde se escribirán las
                                 carpetas de cada programa. Lo recomendable es una carpeta propia (por ejemplo
-                                <code>/media/rtve-play</code>) añadida como biblioteca de tipo «Programas de TV».
+                                <code>/media/rtve-play</code>); con el botón de abajo Jellyfin la añade como
+                                biblioteca de tipo «Programas de TV».
                             </div>
                         </div>
                         <div>
                             <button id="RtveCheckPath" is="emby-button" type="button" class="raised block">
                                 <span>Comprobar carpeta</span>
+                            </button>
+                            <button id="RtveCreateLibrary" is="emby-button" type="button" class="raised block">
+                                <span>Crear biblioteca «RTVE Play» y asociar la carpeta</span>
                             </button>
                             <div id="RtvePathStatus" class="fieldDescription"></div>
                         </div>
@@ -88,18 +92,26 @@
                                 <input id="RtveSubtitleEs" data-rtve-lang="es" type="checkbox" is="emby-checkbox" />
                                 <span>Español (es)</span>
                             </label>
+                        </div>
+                        <div class="checkboxContainer">
                             <label class="emby-checkbox-label">
                                 <input id="RtveSubtitleEn" data-rtve-lang="en" type="checkbox" is="emby-checkbox" />
                                 <span>Inglés (en)</span>
                             </label>
+                        </div>
+                        <div class="checkboxContainer">
                             <label class="emby-checkbox-label">
                                 <input id="RtveSubtitleCa" data-rtve-lang="ca" type="checkbox" is="emby-checkbox" />
                                 <span>Catalán (ca)</span>
                             </label>
+                        </div>
+                        <div class="checkboxContainer">
                             <label class="emby-checkbox-label">
                                 <input id="RtveSubtitleGl" data-rtve-lang="gl" type="checkbox" is="emby-checkbox" />
                                 <span>Gallego (gl)</span>
                             </label>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="RtveSubtitleEu" data-rtve-lang="eu" type="checkbox" is="emby-checkbox" />
                                 <span>Euskera (eu)</span>
@@ -109,6 +121,7 @@
                                 cada episodio. Por defecto no se descarga ninguno.
                             </div>
                         </div>
+                        <div id="RtveSubtitleHint" class="fieldDescription"></div>
                     </div>
                     <div class="verticalSection">
                         <h2 class="sectionTitle">Opciones</h2>
@@ -125,10 +138,12 @@
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="RtveFilterDrm" type="checkbox" is="emby-checkbox" />
-                                <span>Omitir vídeos protegidos con DRM</span>
+                                <span>Omitir los vídeos marcados con DRM</span>
                             </label>
                             <div class="fieldDescription">
-                                Recomendado: los vídeos con DRM no se pueden reproducir desde un archivo .strm.
+                                Déjalo desactivado: RTVE marca con DRM casi todo su catálogo aunque después sirve
+                                un MP4/HLS sin cifrar, así que activarlo deja programas enteros sin episodios.
+                                Actívalo solo si algún vídeo concreto no se reproduce.
                             </div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -212,11 +227,29 @@
             function rtveSyncSubtitleControls() {
                 var download = document.querySelector('#RtveWriteSubtitles').checked;
                 var all = document.querySelector('#RtveSubtitleAll').checked;
+                var hint = document.querySelector('#RtveSubtitleHint');
+                var selected = rtveSelectedLanguages().length;
 
                 document.querySelector('#RtveSubtitleAll').disabled = !download;
                 rtveSubtitleCheckboxes().forEach(function (input) {
                     input.disabled = !download || all;
                 });
+
+                if (!download) {
+                    hint.textContent = '';
+                    return;
+                }
+
+                if (!all && selected === 0) {
+                    // Without a language RTVE tracks are never fetched: say it instead of writing nothing.
+                    hint.textContent = 'No se escribirá ningún .srt: marca al menos un idioma o activa '
+                        + '«Descargar todas las pistas de subtítulos».';
+                    return;
+                }
+
+                hint.textContent = all
+                    ? 'Se guardarán todas las pistas que publique RTVE.'
+                    : 'Se guardarán los idiomas marcados (' + selected + ').';
             }
 
             // The server may serialize the DTOs as PascalCase or camelCase depending on the
@@ -311,13 +344,44 @@
                 return element;
             }
 
-            // Jellyfin's checkbox is a customized built-in element: it has to be created with the
-            // "is" option to be upgraded; if the browser ignores it, a plain checkbox still works.
+            // Jellyfin's checkbox is a customized built-in element registered with
+            // document.registerElement: creating it with the "is" option upgrades it and its
+            // attachedCallback REQUIRES a <span> inside the parent label (it looks it up and adds the
+            // "checkboxLabel" class to it). Without that span the callback throws and the whole render
+            // of the list is aborted, so always build check boxes through rtveCheckboxRow().
             function rtveCheckbox() {
-                var input = document.createElement('input', { is: 'emby-checkbox' });
+                var input;
+                try {
+                    input = document.createElement('input', { is: 'emby-checkbox' });
+                } catch (ex) {
+                    input = document.createElement('input');
+                    input.setAttribute('is', 'emby-checkbox');
+                }
                 input.type = 'checkbox';
                 input.className = 'emby-checkbox';
                 return input;
+            }
+
+            // One row of the catalog: a check box plus its title, with an optional secondary line.
+            function rtveCheckboxRow(title, subtitle, checked, disabled, onChange) {
+                var row = rtveElement('div', 'listItem listItem-border');
+                var label = rtveElement('label', 'emby-checkbox-label');
+                var checkbox = rtveCheckbox();
+                checkbox.checked = checked;
+                checkbox.disabled = disabled;
+                if (onChange) {
+                    checkbox.addEventListener('change', onChange);
+                }
+                label.appendChild(checkbox);
+
+                var text = rtveElement('span', '', title);
+                if (subtitle) {
+                    text.appendChild(rtveElement('span', 'secondary', ' · ' + subtitle));
+                }
+                label.appendChild(text);
+
+                row.appendChild(label);
+                return row;
             }
 
             function rtveRow(title, subtitle, actionLabel, actionClass, onAction) {
@@ -366,6 +430,21 @@
                 return RtvePlayConfig.programs.some(function (item) {
                     return item.Id === programId;
                 });
+            }
+
+            // RTVE mixes radio and TV programs in the same catalog and only video programs can be
+            // mirrored, so a page shows fewer rows than entries the API reported.
+            function rtveCatalogCaption() {
+                var catalog = RtvePlayConfig.catalog;
+                var caption = 'Página ' + catalog.page + ' de ' + catalog.totalPages
+                    + ' · ' + catalog.items.length + ' programas de vídeo en esta página';
+
+                if (catalog.query) {
+                    return caption + ' · búsqueda «' + catalog.query + '»';
+                }
+
+                return caption + ' · RTVE mezcla radio y televisión en el catálogo (' + catalog.totalItems
+                    + ' entradas); los programas de radio no se muestran';
             }
 
             function rtveLoadCatalog(query, page) {
@@ -418,72 +497,56 @@
                     return catalog.selected[id];
                 }).length;
 
-                var toolbar = rtveElement('div', '');
-
-                var selectPage = rtveCheckbox();
-                selectPage.checked = catalog.items.every(function (item) {
-                    var id = rtveField(item, 'id');
-                    return rtveCatalogIsAdded(id) || catalog.selected[id] === true;
-                });
-                selectPage.addEventListener('change', function () {
-                    catalog.items.forEach(function (item) {
-                        var id = rtveField(item, 'id');
-                        if (!rtveCatalogIsAdded(id)) {
-                            catalog.selected[id] = selectPage.checked;
-                        }
-                    });
-                    rtveRenderCatalog();
+                var selectable = catalog.items.filter(function (item) {
+                    return !rtveCatalogIsAdded(rtveField(item, 'id'));
                 });
 
-                var selectLabel = rtveElement('label', 'emby-checkbox-label');
-                selectLabel.appendChild(selectPage);
-                selectLabel.appendChild(rtveElement('span', '', 'Seleccionar la página (' + catalog.items.length + ')'));
-                toolbar.appendChild(selectLabel);
+                var allSelected = selectable.length > 0 && selectable.every(function (item) {
+                    return catalog.selected[rtveField(item, 'id')] === true;
+                });
+
+                container.appendChild(rtveCheckboxRow(
+                    'Seleccionar la página (' + catalog.items.length + ')',
+                    '',
+                    allSelected,
+                    selectable.length === 0,
+                    function () {
+                        var value = this.checked;
+                        selectable.forEach(function (item) {
+                            catalog.selected[rtveField(item, 'id')] = value;
+                        });
+                        rtveRenderCatalog();
+                    }));
 
                 var addButton = rtveElement(
                     'button',
-                    'emby-button raised button-submit',
+                    'emby-button raised button-submit block',
                     'Añadir seleccionados (' + selectedCount + ')');
                 addButton.type = 'button';
                 addButton.disabled = selectedCount === 0;
                 addButton.addEventListener('click', rtveAddSelected);
-                toolbar.appendChild(addButton);
-
-                container.appendChild(toolbar);
+                container.appendChild(addButton);
 
                 catalog.items.forEach(function (item) {
                     var id = rtveField(item, 'id');
                     var title = rtveField(item, 'title') || id;
                     var added = rtveCatalogIsAdded(id);
 
-                    var row = rtveElement('div', 'listItem listItem-border');
-
-                    var label = rtveElement('label', 'emby-checkbox-label');
-                    var checkbox = rtveCheckbox();
-                    checkbox.checked = added || catalog.selected[id] === true;
-                    checkbox.disabled = added;
-                    checkbox.addEventListener('change', function () {
-                        catalog.selected[id] = checkbox.checked;
-                        rtveRenderCatalog();
-                    });
-                    label.appendChild(checkbox);
-                    row.appendChild(label);
-
-                    var body = rtveElement('div', 'listItemBody');
-                    body.appendChild(rtveElement('h3', 'listItemBodyText', title));
-                    body.appendChild(rtveElement(
-                        'div',
-                        'secondary listItemBodyText',
-                        added ? 'id ' + id + ' · ya añadido' : 'id ' + id));
-                    row.appendChild(body);
-
-                    container.appendChild(row);
+                    container.appendChild(rtveCheckboxRow(
+                        title,
+                        added ? 'id ' + id + ' · ya añadido' : 'id ' + id,
+                        added || catalog.selected[id] === true,
+                        added,
+                        function () {
+                            catalog.selected[id] = this.checked;
+                            rtveRenderCatalog();
+                        }));
                 });
 
                 container.appendChild(rtveElement(
                     'div',
                     'fieldDescription',
-                    'Página ' + catalog.page + ' de ' + catalog.totalPages + ' · ' + catalog.totalItems + ' programas en el catálogo de RTVE'));
+                    rtveCatalogCaption()));
 
                 var pager = rtveElement('div', '');
 
@@ -618,6 +681,42 @@
                 });
             }
 
+            function rtveCreateLibrary() {
+                var path = document.querySelector('#RtveDestinationPath').value.trim();
+                var target = document.querySelector('#RtvePathStatus');
+
+                if (!path) {
+                    target.textContent = 'Escribe la carpeta de destino.';
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                ApiClient.ajax({
+                    type: 'POST',
+                    url: rtveUrl('Library/Create', { path: path }),
+                    dataType: 'json'
+                }).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+
+                    var success = rtveField(result, 'success') === true;
+                    var message = rtveField(result, 'message') || '';
+                    var libraryName = rtveField(result, 'libraryName');
+                    var checkedPath = rtveField(result, 'path') || path;
+
+                    if (!success) {
+                        target.textContent = message || 'No se pudo crear la biblioteca.';
+                        return;
+                    }
+
+                    target.textContent = message + ' Ruta: «' + checkedPath + '».';
+                    rtveStatus('Biblioteca «' + (libraryName || 'RTVE Play')
+                        + '» lista. Analiza la biblioteca desde Panel → Bibliotecas para que aparezcan los programas.');
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    target.textContent = 'No se pudo crear la biblioteca. Revisa los permisos de la carpeta.';
+                });
+            }
+
             function rtveRunNow() {
                 Dashboard.showLoadingMsg();
                 rtveSave().then(function () {
@@ -646,10 +745,14 @@
                 document.querySelector('#RtveSearchPrograms').addEventListener('click', rtveSearch);
                 document.querySelector('#RtveListPrograms').addEventListener('click', rtveListPrograms);
                 document.querySelector('#RtveCheckPath').addEventListener('click', rtveCheckPath);
+                document.querySelector('#RtveCreateLibrary').addEventListener('click', rtveCreateLibrary);
                 document.querySelector('#RtveRunNow').addEventListener('click', rtveRunNow);
 
                 document.querySelector('#RtveWriteSubtitles').addEventListener('change', rtveSyncSubtitleControls);
                 document.querySelector('#RtveSubtitleAll').addEventListener('change', rtveSyncSubtitleControls);
+                rtveSubtitleCheckboxes().forEach(function (input) {
+                    input.addEventListener('change', rtveSyncSubtitleControls);
+                });
 
                 document.querySelector('#RtveProgramInput').addEventListener('keydown', function (event) {
                     if (event.key === 'Enter') {

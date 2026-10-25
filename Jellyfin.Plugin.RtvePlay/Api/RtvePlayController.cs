@@ -2,6 +2,7 @@ using Jellyfin.Plugin.RtvePlay.Configuration;
 using Jellyfin.Plugin.RtvePlay.Library;
 using Jellyfin.Plugin.RtvePlay.Rtve;
 using Jellyfin.Plugin.RtvePlay.Tasks;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +20,7 @@ public sealed class RtvePlayController : ControllerBase
 {
     private readonly RtveClient _client;
     private readonly ITaskManager _taskManager;
+    private readonly ILibraryManager _libraryManager;
     private readonly ILogger<RtvePlayController> _logger;
 
     /// <summary>
@@ -26,11 +28,17 @@ public sealed class RtvePlayController : ControllerBase
     /// </summary>
     /// <param name="client">RTVE API client.</param>
     /// <param name="taskManager">Task manager.</param>
+    /// <param name="libraryManager">Library manager.</param>
     /// <param name="logger">Logger.</param>
-    public RtvePlayController(RtveClient client, ITaskManager taskManager, ILogger<RtvePlayController> logger)
+    public RtvePlayController(
+        RtveClient client,
+        ITaskManager taskManager,
+        ILibraryManager libraryManager,
+        ILogger<RtvePlayController> logger)
     {
         _client = client;
         _taskManager = taskManager;
+        _libraryManager = libraryManager;
         _logger = logger;
     }
 
@@ -115,6 +123,43 @@ public sealed class RtvePlayController : ControllerBase
     [HttpGet("Path/Check")]
     public ActionResult<LibraryPathStatus> CheckPath([FromQuery] string? path)
         => Ok(LibraryPath.Check(path));
+
+    /// <summary>
+    /// Creates a «Programas de TV» library that points at the destination folder, or adds the folder
+    /// to the library that already exists.
+    /// </summary>
+    /// <remarks>
+    /// The status is always returned with HTTP 200 and a <c>success</c> flag, so the configuration
+    /// page can show the reason of a rejection instead of a generic error.
+    /// </remarks>
+    /// <param name="path">Destination folder; the configured one when omitted.</param>
+    /// <param name="name">Library name; «RTVE Play» when omitted.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result of the operation.</returns>
+    [HttpPost("Library/Create")]
+    public async Task<ActionResult<LibraryProvisionStatus>> CreateLibraryAsync(
+        [FromQuery] string? path,
+        [FromQuery] string? name,
+        CancellationToken cancellationToken)
+    {
+        var configuration = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        var target = string.IsNullOrWhiteSpace(path) ? configuration.DestinationPath : path;
+
+        var status = await LibraryProvisioner
+            .ProvisionAsync(_libraryManager, target, name, _logger, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (status.Success)
+        {
+            _logger.LogInformation("RTVE Play: biblioteca {Outcome} ({Name} → {Path})", status.Outcome, status.LibraryName, status.Path);
+        }
+        else
+        {
+            _logger.LogWarning("RTVE Play: no se pudo crear la biblioteca: {Message}", status.Message);
+        }
+
+        return Ok(status);
+    }
 
     /// <summary>
     /// Applies the configured refresh interval to the scheduled task.

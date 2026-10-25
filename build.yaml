@@ -1,7 +1,7 @@
 ---
 name: "RTVE Play"
 guid: "3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913"
-version: "1.0.1.0"
+version: "1.0.2.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Crea una biblioteca de series con el catálogo a la carta de RTVE Play (.strm + metadatos + subtítulos)."
@@ -17,9 +17,15 @@ owner: "Lowitle"
 artifacts:
   - "Jellyfin.Plugin.RtvePlay.dll"
 changelog: >
-  1.0.1.0: subtítulos multi-idioma con casillas (uno, varios o todos los que publique RTVE),
-  listado paginado de todo el catálogo de programas para añadirlos seleccionándolos, botón
-  «Comprobar carpeta» y mensaje claro cuando la carpeta de destino no está montada o no es
-  escribible. 1.0.0.0: primera versión: sincronización de programas por id/slug/URL, preferencia
-  de MP4 progresivo con fallback a HLS, filtrado opcional de contenido con DRM, subtítulos en
-  es/en/ca/gl/eu y tarea programada con intervalo configurable.
+  1.0.2.0: botón «Crear biblioteca» que da de alta la carpeta de destino como biblioteca de
+  «Programas de TV» (o añade la carpeta si ya existe), filtro de DRM desactivado por defecto —
+  RTVE marca con hasDRM casi todo el catálogo aunque sirve el MP4/HLS sin cifrar, así que se
+  dejaban programas enteros sin episodios—, migración automática de la configuración guardada,
+  reintentos con espera creciente ante los 429/5xx de RTVE, avisos de diagnóstico de subtítulos y
+  arreglo del listado «Ver todos los programas». 1.0.1.0: subtítulos multi-idioma con casillas
+  (uno, varios o todos los que publique RTVE), listado paginado de todo el catálogo de programas
+  para añadirlos seleccionándolos, botón «Comprobar carpeta» y mensaje claro cuando la carpeta
+  de destino no está montada o no es escribible. 1.0.0.0: primera versión: sincronización de
+  programas por id/slug/URL, preferencia de MP4 progresivo con fallback a HLS, filtrado opcional
+  de contenido con DRM, subtítulos en es/en/ca/gl/eu y tarea programada con intervalo
+  configurable.

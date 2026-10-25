@@ -27,6 +27,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
+        MigrateConfiguration(Configuration);
     }
 
     /// <summary>
@@ -58,5 +59,23 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     GetType().Namespace)
             }
         ];
+    }
+
+    /// <summary>
+    /// Brings the stored settings forward to the current schema. Version 2 turns the DRM filter off:
+    /// RTVE flags many videos as DRM protected but still serves the MP4/HLS unencrypted, so the old
+    /// default silently dropped entire programs from the library.
+    /// </summary>
+    /// <param name="configuration">Stored configuration.</param>
+    private void MigrateConfiguration(PluginConfiguration configuration)
+    {
+        if (configuration.ConfigurationVersion >= PluginConfiguration.CurrentVersion)
+        {
+            return;
+        }
+
+        configuration.FilterDrm = false;
+        configuration.ConfigurationVersion = PluginConfiguration.CurrentVersion;
+        UpdateConfiguration(configuration);
     }
 }

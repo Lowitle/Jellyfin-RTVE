@@ -24,14 +24,20 @@ public class RtveProgramReference
 public class PluginConfiguration : BasePluginConfiguration
 {
     /// <summary>
+    /// Schema version of the configuration written by this build.
+    /// </summary>
+    public const int CurrentVersion = 2;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="PluginConfiguration"/> class.
     /// </summary>
     public PluginConfiguration()
     {
+        ConfigurationVersion = CurrentVersion;
         Programs = new List<RtveProgramReference>();
         DestinationPath = string.Empty;
         RefreshIntervalHours = 12;
-        FilterDrm = true;
+        FilterDrm = false;
         PreferMp4 = true;
         WriteNfo = true;
         WriteSubtitles = true;
@@ -41,6 +47,11 @@ public class PluginConfiguration : BasePluginConfiguration
         SubtitleLanguage = string.Empty;
         MaxItemsPerProgram = 0;
     }
+
+    /// <summary>
+    /// Gets or sets the version of the configuration schema, used to migrate stored settings.
+    /// </summary>
+    public int ConfigurationVersion { get; set; }
 
     /// <summary>
     /// Gets or sets the programs to mirror.
@@ -60,6 +71,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets a value indicating whether items flagged with DRM are skipped.
     /// </summary>
+    /// <remarks>
+    /// Disabled by default: RTVE marks most of its catalog with <c>hasDRM</c> even though the
+    /// progressive MP4 and the HLS playlist it serves are not encrypted, so filtering them drops
+    /// whole programs. It is kept as an escape hatch for regions or contents that really fail.
+    /// </remarks>
     public bool FilterDrm { get; set; }
 
     /// <summary>

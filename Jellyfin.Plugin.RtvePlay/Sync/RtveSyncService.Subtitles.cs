@@ -23,6 +23,10 @@ public sealed partial class RtveSyncService
         var languages = NormalizeLanguages(configuration.SubtitleLanguages, configuration.SubtitleLanguage);
         if (!configuration.DownloadAllSubtitleLanguages && languages.Count == 0)
         {
+            _logger.LogDebug(
+                "RTVE Play: la descarga de subtítulos está activa pero no hay idiomas marcados; "
+                + "no se escribe ningún .srt del vídeo {VideoId} (marca al menos un idioma en la configuración)",
+                videoId);
             return [];
         }
 
@@ -35,6 +39,11 @@ public sealed partial class RtveSyncService
         var selection = SelectSubtitleTracks(tracks, languages, configuration.DownloadAllSubtitleLanguages);
         if (selection.Count == 0)
         {
+            _logger.LogInformation(
+                "RTVE Play: el vídeo {VideoId} publica subtítulos en {Published} pero ninguno coincide con los idiomas configurados ({Requested})",
+                videoId,
+                string.Join(", ", tracks.Select(track => track.Language).Where(lang => !string.IsNullOrWhiteSpace(lang))),
+                string.Join(", ", languages));
             return [];
         }
 
@@ -45,10 +54,14 @@ public sealed partial class RtveSyncService
             var vtt = await _client.GetStringAsync(track.Source, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(vtt))
             {
-                _logger.LogDebug(
-                    "RTVE Play: sin subtítulo {Language} para el vídeo {VideoId}",
+                // The download swallows the HTTP status, so the URL is logged to tell a gone track
+                // from a throttled request.
+                _logger.LogWarning(
+                    "RTVE Play: no se pudo descargar el subtítulo {Language} del vídeo {VideoId} ({Url}); "
+                    + "se reintentará en la próxima sincronización",
                     track.Language,
-                    videoId);
+                    videoId,
+                    track.Source);
                 continue;
             }
 

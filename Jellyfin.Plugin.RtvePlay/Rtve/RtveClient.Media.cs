@@ -31,9 +31,7 @@ public sealed partial class RtveClient
     {
         try
         {
-            using var response = await _httpClient
-                .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                .ConfigureAwait(false);
+            using var response = await SendWithRetryAsync(url, cancellationToken).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -210,9 +208,7 @@ public sealed partial class RtveClient
 
         try
         {
-            using var response = await _httpClient
-                .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                .ConfigureAwait(false);
+            using var response = await SendWithRetryAsync(url, cancellationToken).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {

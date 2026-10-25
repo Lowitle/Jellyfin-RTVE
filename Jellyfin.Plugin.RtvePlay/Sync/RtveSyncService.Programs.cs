@@ -38,8 +38,35 @@ public sealed partial class RtveSyncService
 
         var seriesPlot = HtmlText.FromHtml(program?.LongDescription) ?? HtmlText.FromHtml(program?.Description);
 
+        // RTVE flags most of its catalog with hasDRM although the MP4/HLS it serves is not encrypted,
+        // so filtering them is opt-in and the log has to state exactly how many episodes it drops.
         var usable = videos.Where(v => !string.IsNullOrWhiteSpace(v.Id)).ToList();
-        var numbered = usable.Count > 0 && usable.All(v => v.Episode is > 0);
+        if (configuration.FilterDrm)
+        {
+            var flagged = usable.Count(v => v.HasDrm);
+            if (flagged > 0)
+            {
+                usable = usable.Where(v => !v.HasDrm).ToList();
+                _logger.LogWarning(
+                    "RTVE Play: {Skipped} de {Total} vídeos de «{Series}» están marcados con DRM y se omiten por la configuración; "
+                    + "RTVE marca así buena parte del catálogo aunque el vídeo se reproduce, así que desactiva la opción si faltan episodios",
+                    flagged,
+                    videos.Count,
+                    seriesTitle);
+            }
+        }
+
+        if (usable.Count == 0)
+        {
+            _logger.LogWarning(
+                "RTVE Play: «{Series}» se queda sin episodios porque todos sus vídeos están marcados con DRM "
+                + "y la opción «Omitir los vídeos marcados con DRM» está activa",
+                seriesTitle);
+            reportProgress(1d);
+            return 0;
+        }
+
+        var numbered = usable.All(v => v.Episode is > 0);
         var ordered = usable
             .OrderBy(v => v.PublicationDateTimestamp ?? 0L)
             .ThenBy(v => v.Id, StringComparer.Ordinal)
@@ -79,6 +106,15 @@ public sealed partial class RtveSyncService
         {
             _logger.LogWarning("RTVE Play: no se pudo resolver ningún vídeo del programa {ProgramId}", programId);
             return 0;
+        }
+
+        if (skipped > 0)
+        {
+            _logger.LogWarning(
+                "RTVE Play: {Skipped} de {Total} vídeos de «{Series}» se han descartado porque no tienen URL reproducible (mira los avisos anteriores)",
+                skipped,
+                ordered.Count,
+                seriesTitle);
         }
 
         var result = StrmLibrary.Write(

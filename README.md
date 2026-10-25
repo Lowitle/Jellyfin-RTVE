@@ -34,7 +34,13 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
   idiomas, o **todos los idiomas disponibles** para bajar cada pista que publique RTVE.
 - **Comprobación de la carpeta de destino**: el botón **Comprobar carpeta** dice si Jellyfin puede
   escribir en ella y, si no, propone carpetas escribibles del servidor.
-- **Filtro de DRM**: omite el contenido protegido, que no se puede reproducir con `.strm`.
+- **Biblioteca en un clic**: el botón **Crear biblioteca «RTVE Play»** da de alta la carpeta de destino
+  como biblioteca de tipo *Programas de TV* (o añade la carpeta a la biblioteca si ya existe), sin pasar
+  por el asistente de Jellyfin.
+- **Filtro de DRM opcional**: desactivado por defecto, porque RTVE marca con `hasDRM` buena parte del
+  catálogo aunque después sirva el MP4/HLS sin cifrar.
+- **Reintentos**: las descargas repiten la petición cuando RTVE responde 429/5xx (límite de peticiones)
+  con una espera creciente, antes de dar un subtítulo o un catálogo por perdido.
 - **Tarea programada** `Actualizar RTVE Play` con intervalo configurable y ejecución al arrancar, además
   de un botón **Ejecutar ahora** en la página de configuración.
 
@@ -42,7 +48,8 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
 
 - Jellyfin **10.11.x** (compilado contra `Jellyfin.Controller` 10.11).
 - Una carpeta escribible por Jellyfin para el plugin, añadida como biblioteca de tipo **Programas de TV**.
-  Lo recomendable es una **biblioteca propia** (ver *Carpeta de destino: biblioteca separada*).
+  Lo recomendable es una **biblioteca propia** (ver *Carpeta de destino: biblioteca separada*); el botón
+  **Crear biblioteca «RTVE Play»** de la página de configuración la da de alta por ti.
 - Acceso de red a `www.rtve.es` / `api.rtve.es`. El catálogo de RTVE Play está geobloqueado fuera de
   España para algunos contenidos: las URLs se generan igualmente, pero la reproducción puede fallar.
 
@@ -114,13 +121,15 @@ git tag v1.0.0.0
 git push origin v1.0.0.0
 ```
 
-El tag lanzó el workflow **Release**: build + 104 pruebas, release `v1.0.0.0` con `rtveplay_1.0.0.0.zip` y
+El tag lanzó el workflow **Release**: build + 141 pruebas, release `v1.0.0.0` con `rtveplay_1.0.0.0.zip` y
 commit automático del `manifest.json` (`checksum` MD5 `926CE03042BAD6AF413E533CBA058404`). La versión
 **1.0.1.0** añade los subtítulos multi-idioma, el listado paginado de programas y la comprobación de la
-carpeta de destino.
+carpeta de destino; la **1.0.2.0** añade el botón **Crear biblioteca**, deja el filtro de DRM desactivado
+por defecto (con migración automática de la configuración guardada) y reintenta las descargas ante los
+`429`/`5xx` de RTVE.
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
-publica el tag (`git tag v1.0.1.0; git push origin v1.0.1.0`). El manifiesto y la release se actualizan solos.
+publica el tag (`git tag v1.0.2.0; git push origin v1.0.2.0`). El manifiesto y la release se actualizan solos.
 
 ## Configuración
 
@@ -144,10 +153,11 @@ seleccionar. Recuerda pulsar **Guardar** al terminar.
 | --- | --- | --- |
 | **Carpeta de destino** | *(vacío)* | Ruta absoluta tal y como la ve el servidor. Debe ser una carpeta propia añadida como biblioteca de tipo *Programas de TV* (ver abajo). |
 | **Comprobar carpeta** | — | Comprueba que la carpeta existe y que Jellyfin puede escribir en ella; si falla, propone carpetas escribibles del servidor. |
+| **Crear biblioteca «RTVE Play»** | — | Crea (o reutiliza) una biblioteca de tipo *Programas de TV* apuntando a la carpeta de destino. Si la carpeta ya está en una biblioteca de series, no hace nada; si pertenece a una de otro tipo, avisa del conflicto. |
 | **Intervalo de actualización (horas)** | `12` | Periodicidad de la tarea programada (1–168). |
 | **Máximo de vídeos por programa** | `0` | Limita cuántos episodios se replican por programa; `0` = sin límite. |
 | **Preferir MP4 progresivo** | activado | Usa MP4 directo cuando existe (permite *seek*); si no, HLS. |
-| **Omitir vídeos protegidos con DRM** | activado | Recomendado: un `.strm` no puede reproducir contenido con DRM. |
+| **Omitir vídeos protegidos con DRM** | desactivado | Solo si algún vídeo concreto no se reproduce: RTVE marca con `hasDRM` casi todo el catálogo aunque después sirve un MP4/HLS **sin cifrar**, así que activarlo deja programas enteros sin episodios. |
 | **Escribir metadatos .nfo** | activado | Genera `tvshow.nfo` y un `.nfo` por episodio. |
 | **Borrar episodios que ya no están en el catálogo** | desactivado | Elimina `.strm`/`.nfo`/`.srt` sobrantes; úsalo solo si la carpeta es exclusiva del plugin. |
 
@@ -170,6 +180,8 @@ Jellyfin. Por eso lo más limpio es darle una carpeta propia y añadirla como **
 - Puedes borrar, mover o reconstruir la carpeta sin tocar el resto de tu biblioteca.
 - **Borrar episodios que ya no están en el catálogo** es seguro, porque esa carpeta solo contiene lo que
   genera el plugin.
+- El botón **Crear biblioteca «RTVE Play»** de la página de configuración da de alta esa biblioteca
+  apuntando a la carpeta de destino (o añade la carpeta a la biblioteca «RTVE Play» si ya existía).
 - Jellyfin la indexa igual que cualquier otra biblioteca: carátulas, `tvshow.nfo`, episodios y subtítulos.
 - **Docker**: monta un volumen dedicado (p. ej. `-v /srv/rtve-play:/media/rtve-play`) y escribe en
   *Carpeta de destino* la ruta **del contenedor** (`/media/rtve-play`), no la del host. La ruta debe ser
@@ -250,8 +262,13 @@ dos episodios comparten título. Los archivos solo se reescriben si el contenido
 
 ## Limitaciones conocidas
 
-- **DRM**: el contenido protegido (algunos directos y series de terceros) no se puede reproducir desde
-  `.strm`; actívalo con el filtro de DRM.
+- **DRM**: RTVE marca con `hasDRM` buena parte del catálogo aunque el MP4 progresivo y la playlist HLS que
+  sirve van **sin cifrar**, así que el filtro de DRM está **desactivado** por defecto (una configuración
+  antigua se migra sola a partir de la versión 2 del esquema). Los directos y algunos contenidos de
+  terceros sí pueden requerir DRM real: si un vídeo concreto no arranca, activa el filtro.
+- **Límite de peticiones**: RTVE responde a veces `429`/`503`. Las descargas se reintentan tres veces con
+  espera creciente; si aun así falla un subtítulo, el aviso del log incluye la URL y se recupera en la
+  siguiente sincronización.
 - **Geobloqueo**: fuera de España parte del catálogo devuelve error al reproducir.
 - **API no oficial**: RTVE puede cambiar los endpoints o el esquema de datos sin previo aviso.
 - **DASH**: se ignora (`mpd`); solo se usan MP4 progresivo y HLS.

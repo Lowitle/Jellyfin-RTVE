@@ -164,9 +164,7 @@ public sealed partial class RtveClient
     {
         try
         {
-            using var response = await _httpClient
-                .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                .ConfigureAwait(false);
+            using var response = await SendWithRetryAsync(url, cancellationToken).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -186,6 +184,62 @@ public sealed partial class RtveClient
         {
             _logger.LogDebug(ex, "Error de red al leer {Url}", url);
             return default;
+        }
+    }
+
+    /// <summary>
+    /// Sends a GET request, repeating it while RTVE answers with a transient status (throttling,
+    /// gateway errors) or the connection fails. The response is returned as is, so the caller decides
+    /// what an unsuccessful status means for the resource it asked for.
+    /// </summary>
+    /// <param name="url">Resource URL.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The response of the last attempt; the caller disposes it.</returns>
+    private async Task<HttpResponseMessage> SendWithRetryAsync(string url, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var response = await _httpClient
+                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (!HttpRetryPolicy.IsTransient(response.StatusCode))
+                {
+                    return response;
+                }
+
+                if (attempt >= HttpRetryPolicy.MaxAttempts)
+                {
+                    _logger.LogWarning(
+                        "RTVE sigue respondiendo {Status} para {Url} tras {Attempts} intentos",
+                        (int)response.StatusCode,
+                        url,
+                        attempt);
+                    return response;
+                }
+
+                _logger.LogInformation(
+                    "RTVE respondió {Status} para {Url}; reintento {Attempt}/{Max}",
+                    (int)response.StatusCode,
+                    url,
+                    attempt,
+                    HttpRetryPolicy.MaxAttempts);
+
+                response.Dispose();
+            }
+            catch (HttpRequestException ex) when (attempt < HttpRetryPolicy.MaxAttempts)
+            {
+                _logger.LogInformation(
+                    ex,
+                    "Error de red al leer {Url}; reintento {Attempt}/{Max}",
+                    url,
+                    attempt,
+                    HttpRetryPolicy.MaxAttempts);
+            }
+
+            await Task.Delay(HttpRetryPolicy.Delay(attempt), cancellationToken).ConfigureAwait(false);
         }
     }
 }
