@@ -1,11 +1,20 @@
 [
-  {
-    "guid": "3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913",
-    "name": "RTVE Play",
-    "description": "Genera una biblioteca de series a partir del catálogo a la carta de RTVE Play (.strm + metadatos + subtítulos).",
-    "overview": "Replica el catálogo de RTVE Play como biblioteca de series de Jellyfin mediante archivos .strm, con metadatos .nfo, carátulas y subtítulos SRT convertidos desde los WebVTT originales.",
-    "owner": "Lowitle",
-    "category": "General",
-    "versions": []
-  }
+{
+  "guid": "3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913",
+  "name": "RTVE Play",
+  "description": "Genera una biblioteca de series a partir del catálogo a la carta de RTVE Play (.strm + metadatos + subtítulos).",
+  "overview": "Replica el catálogo de RTVE Play como biblioteca de series de Jellyfin mediante archivos .strm, con metadatos .nfo, carátulas y subtítulos SRT convertidos desde los WebVTT originales.",
+  "owner": "Lowitle",
+  "category": "General",
+  "versions": [
+    {
+      "version": "1.0.0.0",
+      "changelog": "RTVE Play 1.0.0.0",
+      "targetAbi": "10.11.0.0",
+      "sourceUrl": "https://github.com/Lowitle/Jellyfin-RTVE/releases/download/v1.0.0.0/rtveplay_1.0.0.0.zip",
+      "checksum": "926CE03042BAD6AF413E533CBA058404",
+      "timestamp": "2026-10-25T05:45:32Z"
+    }
+  ]
+}
 ]
