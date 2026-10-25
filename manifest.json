@@ -9,7 +9,7 @@
   "versions": [
     {
       "version": "1.0.8.0",
-      "changelog": "RTVE Play 1.0.8.0",
+      "changelog": "El boton Crear biblioteca asocia a la biblioteca cada subcarpeta de tipo (peliculas, series-de-tv, documentales, magacines, programas-de-tv, noticias, infantil, anime, podcast, archivo y otros) en lugar de la carpeta raiz, y migra las bibliotecas que ya apuntaban a la raiz sustituyendola por esas subcarpetas para que Jellyfin no indexe dos veces los mismos programas. Al desactivar la organizacion por tipo la biblioteca vuelve a apuntar a la carpeta de destino, y si esa carpeta ya es una de las subcarpetas se usa tal cual.",
       "targetAbi": "10.11.0.0",
       "sourceUrl": "https://github.com/Lowitle/Jellyfin-RTVE/releases/download/v1.0.8.0/rtveplay_1.0.8.0.zip",
       "checksum": "B3A414E153EAA7DD1AB29CA088C621B1",
