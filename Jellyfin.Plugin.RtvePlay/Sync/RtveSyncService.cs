@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.RtvePlay.Configuration;
+using Jellyfin.Plugin.RtvePlay.Library;
 using Jellyfin.Plugin.RtvePlay.Rtve;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
@@ -64,7 +65,11 @@ public sealed partial class RtveSyncService
             throw new InvalidOperationException("RTVE Play: configura la carpeta de destino antes de actualizar.");
         }
 
-        Directory.CreateDirectory(configuration.DestinationPath);
+        // Fails fast with an actionable message when the folder is not mounted inside the container
+        // or Jellyfin cannot write into it (instead of an UnauthorizedAccessException from deep
+        // inside the write path).
+        LibraryPath.EnsureWritableRoot(configuration.DestinationPath);
+        _logger.LogInformation("RTVE Play: carpeta de destino {Path}", configuration.DestinationPath.Trim());
 
         var totalWritten = 0;
         for (var i = 0; i < references.Count; i++)

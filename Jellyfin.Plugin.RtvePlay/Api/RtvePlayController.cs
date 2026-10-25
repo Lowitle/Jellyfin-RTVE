@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.RtvePlay.Configuration;
+using Jellyfin.Plugin.RtvePlay.Library;
 using Jellyfin.Plugin.RtvePlay.Rtve;
 using Jellyfin.Plugin.RtvePlay.Tasks;
 using MediaBrowser.Model.Tasks;
@@ -83,6 +84,37 @@ public sealed class RtvePlayController : ControllerBase
             return BadRequest(ex.Message);
         }
     }
+
+    /// <summary>
+    /// Lists the television programs of the RTVE catalog, one page at a time.
+    /// </summary>
+    /// <param name="query">Title filter (empty to list the whole catalog).</param>
+    /// <param name="page">Page number (1 based).</param>
+    /// <param name="size">Page size (1-100).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The page of programs, radio programs excluded.</returns>
+    [HttpGet("Programs/List")]
+    public async Task<ActionResult<RtveProgramPage>> ListAsync(
+        [FromQuery] string? query,
+        [FromQuery] int? page,
+        [FromQuery] int? size,
+        CancellationToken cancellationToken)
+    {
+        var result = await _client
+            .ListProgramsAsync(query, page ?? 1, size ?? 40, cancellationToken)
+            .ConfigureAwait(false);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Checks that the destination folder exists and is writable by the Jellyfin process.
+    /// </summary>
+    /// <param name="path">Folder to check.</param>
+    /// <returns>The result of the check.</returns>
+    [HttpGet("Path/Check")]
+    public ActionResult<LibraryPathStatus> CheckPath([FromQuery] string? path)
+        => Ok(LibraryPath.Check(path));
 
     /// <summary>
     /// Applies the configured refresh interval to the scheduled task.

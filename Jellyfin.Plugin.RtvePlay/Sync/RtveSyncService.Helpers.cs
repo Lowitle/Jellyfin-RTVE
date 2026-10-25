@@ -74,4 +74,36 @@ public sealed partial class RtveSyncService
             _ => language
         };
     }
+
+    /// <summary>
+    /// Normalizes the list of subtitle languages selected in the configuration.
+    /// </summary>
+    /// <param name="configured">Languages selected with the check boxes.</param>
+    /// <param name="legacy">Single language of plugin versions before 1.0.1.0 (migration fallback).</param>
+    /// <returns>The distinct ISO codes to download, in the configured order.</returns>
+    internal static IReadOnlyList<string> NormalizeLanguages(IEnumerable<string>? configured, string? legacy = null)
+    {
+        var languages = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var value in configured ?? [])
+        {
+            var language = NormalizeLanguage(value);
+            if (language is not null && seen.Add(language))
+            {
+                languages.Add(language);
+            }
+        }
+
+        if (languages.Count == 0)
+        {
+            var language = NormalizeLanguage(legacy);
+            if (language is not null)
+            {
+                languages.Add(language);
+            }
+        }
+
+        return languages;
+    }
 }

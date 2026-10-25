@@ -72,11 +72,13 @@ public static class StrmLibrary
                     written) ? 1 : 0;
             }
 
-            if (options.WriteSubtitles && !string.IsNullOrWhiteSpace(episode.SubtitleSrt))
+            if (options.WriteSubtitles)
             {
-                var language = string.IsNullOrWhiteSpace(episode.SubtitleLanguage) ? "es" : episode.SubtitleLanguage;
-                var srtPath = Path.Combine(seasonFolder, $"{baseName}.{language}.srt");
-                filesWritten += WriteText(srtPath, ToCrlf(episode.SubtitleSrt), written) ? 1 : 0;
+                foreach (var subtitle in DistinctLanguages(episode.Subtitles))
+                {
+                    var srtPath = Path.Combine(seasonFolder, $"{baseName}.{subtitle.Language}.srt");
+                    filesWritten += WriteText(srtPath, ToCrlf(subtitle.Srt), written) ? 1 : 0;
+                }
             }
 
             count++;
@@ -85,6 +87,44 @@ public static class StrmLibrary
         var removed = options.DeleteObsolete ? DeleteObsolete(seriesFolder, written) : 0;
 
         return new LibraryWriteResult(seriesFolder, count, filesWritten, removed);
+    }
+
+    /// <summary>
+    /// Keeps the first subtitle of every language so two RTVE tracks of the same language never
+    /// write the same file twice.
+    /// </summary>
+    /// <param name="subtitles">Subtitles of the episode.</param>
+    /// <returns>The subtitles to write, one per language.</returns>
+    private static IEnumerable<LibrarySubtitle> DistinctLanguages(IReadOnlyList<LibrarySubtitle>? subtitles)
+    {
+        if (subtitles is null)
+        {
+            yield break;
+        }
+
+        var languages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var subtitle in subtitles)
+        {
+            if (string.IsNullOrWhiteSpace(subtitle.Srt))
+            {
+                continue;
+            }
+
+            var language = string.IsNullOrWhiteSpace(subtitle.Language) ? "es" : subtitle.Language.Trim().ToLowerInvariant();
+
+            // The language ends up in a file name: keep only ASCII letters and digits.
+            language = new string(language.Where(char.IsAsciiLetterOrDigit).ToArray());
+            if (language.Length == 0)
+            {
+                language = "es";
+            }
+
+            if (languages.Add(language))
+            {
+                yield return subtitle with { Language = language };
+            }
+        }
     }
 
     private static string Unique(string baseName, HashSet<string> used)

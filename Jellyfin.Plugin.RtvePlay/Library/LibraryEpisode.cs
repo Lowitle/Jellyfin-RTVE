@@ -31,14 +31,9 @@ public sealed class LibraryEpisode
     public string Url { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the SRT subtitle content, when available.
+    /// Gets or sets the subtitles to write next to the episode (one SRT file per language).
     /// </summary>
-    public string? SubtitleSrt { get; set; }
-
-    /// <summary>
-    /// Gets or sets the subtitle language ("es", "en"...).
-    /// </summary>
-    public string? SubtitleLanguage { get; set; }
+    public IReadOnlyList<LibrarySubtitle> Subtitles { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the air date.
@@ -70,6 +65,13 @@ public sealed class LibraryEpisode
     /// </summary>
     public string? Director { get; set; }
 }
+
+/// <summary>
+/// A subtitle track ready to be written next to an episode.
+/// </summary>
+/// <param name="Language">ISO language code of the track ("es", "en", "ca", "gl", "eu"...).</param>
+/// <param name="Srt">SRT content.</param>
+public sealed record LibrarySubtitle(string Language, string Srt);
 
 /// <summary>
 /// Options of <see cref="StrmLibrary.Write"/>.

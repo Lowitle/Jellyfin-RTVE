@@ -75,6 +75,75 @@ public sealed class StrmLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Write_WritesOneSrtPerLanguage()
+    {
+        var episode = Episode(1, 1, "Uno");
+        episode.Subtitles =
+        [
+            new LibrarySubtitle("es", Srt),
+            new LibrarySubtitle("EN", Srt + "2"),
+            new LibrarySubtitle("es", "duplicado"),
+        ];
+
+        var result = StrmLibrary.Write(
+            _root,
+            "Serie",
+            "serie",
+            null,
+            [episode],
+            new LibraryWriteOptions { WriteNfo = false });
+
+        var season = Path.Combine(_root, "Serie", "Season 1");
+        var baseName = Path.Combine(season, "Serie - S01E01 - Uno");
+
+        Assert.Equal(3, result.FilesWritten);
+        Assert.Equal(2, Directory.EnumerateFiles(season, "*.srt").Count());
+        Assert.Equal(Srt.Replace("\n", "\r\n", StringComparison.Ordinal), File.ReadAllText(baseName + ".es.srt"));
+        Assert.Equal((Srt + "2").Replace("\n", "\r\n", StringComparison.Ordinal), File.ReadAllText(baseName + ".en.srt"));
+    }
+
+    [Fact]
+    public void Write_SkipsEmptySubtitles()
+    {
+        var episode = Episode(1, 1, "Uno");
+        episode.Subtitles = [new LibrarySubtitle("es", "   "), new LibrarySubtitle("en", string.Empty)];
+
+        var result = StrmLibrary.Write(
+            _root,
+            "Serie",
+            "serie",
+            null,
+            [episode],
+            new LibraryWriteOptions { WriteNfo = false });
+
+        var season = Path.Combine(_root, "Serie", "Season 1");
+
+        Assert.Equal(1, result.FilesWritten);
+        Assert.Empty(Directory.EnumerateFiles(season, "*.srt"));
+    }
+
+    [Fact]
+    public void Write_SanitizesTheSubtitleLanguage()
+    {
+        var episode = Episode(1, 1, "Uno");
+        episode.Subtitles = [new LibrarySubtitle("../es-ES", Srt)];
+
+        StrmLibrary.Write(
+            _root,
+            "Serie",
+            "serie",
+            null,
+            [episode],
+            new LibraryWriteOptions { WriteNfo = false });
+
+        var season = Path.Combine(_root, "Serie", "Season 1");
+
+        Assert.Equal(
+            ["Serie - S01E01 - Uno.eses.srt"],
+            Directory.EnumerateFiles(season, "*.srt").Select(Path.GetFileName));
+    }
+
+    [Fact]
     public void Write_HonoursTheToggles()
     {
         var result = StrmLibrary.Write(
@@ -146,7 +215,6 @@ public sealed class StrmLibraryTests : IDisposable
             Episode = episode,
             Title = title,
             Url = "https://host/video.mp4",
-            SubtitleSrt = Srt,
-            SubtitleLanguage = "es",
+            Subtitles = [new LibrarySubtitle("es", Srt)],
         };
 }

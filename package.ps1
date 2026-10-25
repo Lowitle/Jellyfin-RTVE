@@ -10,13 +10,19 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = 'Release',
-    [string]$Version = '1.0.0.0'
+    # Empty = the Version of Directory.Build.props.
+    [string]$Version
 )
 
 $ErrorActionPreference = 'Stop'
 
 $root = $PSScriptRoot
 $project = Join-Path (Join-Path $root 'Jellyfin.Plugin.RtvePlay') 'Jellyfin.Plugin.RtvePlay.csproj'
+
+if (-not $Version) {
+    [xml]$props = Get-Content -Path (Join-Path $root 'Directory.Build.props')
+    $Version = @($props.Project.PropertyGroup)[0].Version
+}
 
 Write-Host "Compilando $project ($Configuration)..." -ForegroundColor Cyan
 dotnet build $project -c $Configuration --nologo -v minimal

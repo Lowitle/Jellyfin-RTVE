@@ -131,6 +131,70 @@ public sealed partial class RtveClient
     }
 
     /// <summary>
+    /// Lists the television programs of the RTVE catalog, one page at a time. Radio programs are
+    /// filtered out because they have no videos to mirror.
+    /// </summary>
+    /// <param name="query">Title filter (empty to list the whole catalog).</param>
+    /// <param name="page">Page number (1 based).</param>
+    /// <param name="size">Page size (1-100).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The page of programs.</returns>
+    public async Task<RtveProgramPage> ListProgramsAsync(
+        string? query,
+        int page,
+        int size,
+        CancellationToken cancellationToken)
+    {
+        var currentPage = Math.Max(1, page);
+        var pageSize = Math.Clamp(size, 1, PageSize);
+        var filter = query?.Trim() ?? string.Empty;
+
+        if (filter.Length > 0)
+        {
+            // The catalog endpoint cannot filter by title server side, so the search helper is used
+            // and the requested slice is cut out of its results.
+            var wanted = Math.Min(currentPage * pageSize, MaxFilteredMatches);
+            var found = await SearchProgramsAsync(filter, wanted, cancellationToken).ConfigureAwait(false);
+            var items = found.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+            var hasMore = found.Count >= wanted && wanted < MaxFilteredMatches;
+
+            return new RtveProgramPage(
+                items,
+                currentPage,
+                hasMore ? currentPage + 1 : currentPage,
+                found.Count,
+                hasMore);
+        }
+
+        var url = string.Format(
+            CultureInfo.InvariantCulture,
+            "https://api.rtve.es/api/programas.json?page={0}&size={1}",
+            currentPage,
+            pageSize);
+
+        var envelope = await GetJsonAsync<RtveEnvelope<RtveProgram>>(url, cancellationToken).ConfigureAwait(false);
+        var resultPage = envelope?.Page;
+
+        var programs = (resultPage?.Items ?? [])
+            .Where(program => program.Id is not null && IsVideoProgram(program.HtmlUrl))
+            .Select(program => new RtveProgramSummary(
+                program.Id!,
+                program.Title ?? program.Id!,
+                program.HtmlUrl,
+                program.PosterImage))
+            .ToList();
+
+        var totalPages = Math.Max(1, resultPage?.TotalPages ?? 1);
+
+        return new RtveProgramPage(
+            programs,
+            currentPage,
+            totalPages,
+            resultPage?.Total ?? programs.Count,
+            currentPage < totalPages);
+    }
+
+    /// <summary>
     /// Downloads a resource to disk only when the destination does not exist yet.
     /// </summary>
     /// <param name="url">Resource URL.</param>

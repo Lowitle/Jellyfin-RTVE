@@ -5,7 +5,7 @@
     <title>RTVE Play</title>
 </head>
 <body>
-    <div id="RtvePlayConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
+    <div id="RtvePlayConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
         <div data-role="content">
             <div class="content-primary">
                 <div class="verticalSection">
@@ -26,9 +26,12 @@
                         <button id="RtveSearchPrograms" is="emby-button" type="button" class="raised block">
                             <span>Buscar por título</span>
                         </button>
+                        <button id="RtveListPrograms" is="emby-button" type="button" class="raised block">
+                            <span>Ver todos los programas</span>
+                        </button>
                     </div>
                     <div id="RtvePrograms"></div>
-                    <div id="RtveSearchResults"></div>
+                    <div id="RtveCatalog"></div>
                 </div>
 
                 <form id="RtvePlayConfigForm">
@@ -36,12 +39,18 @@
                         <h2 class="sectionTitle">Biblioteca</h2>
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="RtveDestinationPath">Carpeta de destino</label>
-                            <input id="RtveDestinationPath" type="text" is="emby-input" placeholder="/media/series/RTVE Play" />
+                            <input id="RtveDestinationPath" type="text" is="emby-input" placeholder="/media/rtve-play" />
                             <div class="fieldDescription">
                                 Ruta absoluta, tal y como la ve el servidor Jellyfin, donde se escribirán las
                                 carpetas de cada programa. Lo recomendable es una carpeta propia (por ejemplo
                                 <code>/media/rtve-play</code>) añadida como biblioteca de tipo «Programas de TV».
                             </div>
+                        </div>
+                        <div>
+                            <button id="RtveCheckPath" is="emby-button" type="button" class="raised block">
+                                <span>Comprobar carpeta</span>
+                            </button>
+                            <div id="RtvePathStatus" class="fieldDescription"></div>
                         </div>
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="RtveRefreshInterval">Intervalo de actualización (horas)</label>
@@ -51,20 +60,53 @@
                             <label class="inputLabel inputLabelUnfocused" for="RtveMaxItems">Máximo de vídeos por programa (0 = sin límite)</label>
                             <input id="RtveMaxItems" type="number" is="emby-input" min="0" step="1" />
                         </div>
-                        <div class="selectContainer">
-                            <label class="selectLabel" for="RtveSubtitleLanguage">Idioma de los subtítulos</label>
-                            <select id="RtveSubtitleLanguage" is="emby-select" class="emby-select-withcolor emby-select">
-                                <option value="none">No descargar subtítulos</option>
-                                <option value="es">Español (es)</option>
-                                <option value="en">Inglés (en)</option>
-                                <option value="ca">Catalán (ca)</option>
-                                <option value="gl">Gallego (gl)</option>
-                                <option value="eu">Euskera (eu)</option>
-                            </select>
+                    </div>
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Subtítulos</h2>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveWriteSubtitles" type="checkbox" is="emby-checkbox" />
+                                <span>Descargar subtítulos</span>
+                            </label>
                             <div class="fieldDescription">
-                                Por defecto no se descargan. RTVE publica los WebVTT en es, en, ca, gl y eu;
-                                elige el idioma que quieras guardar junto a cada episodio (<code>.es.srt</code>,
-                                <code>.en.srt</code>…).
+                                Descarga los WebVTT de RTVE y los convierte a SRT junto al archivo .strm
+                                (<code>episodio.es.srt</code>, <code>episodio.en.srt</code>…).
+                            </div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveSubtitleAll" type="checkbox" is="emby-checkbox" />
+                                <span>Todos los idiomas disponibles de cada vídeo</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Descarga todas las pistas que publique RTVE para cada episodio, sin tener en
+                                cuenta las casillas de idioma de abajo.
+                            </div>
+                        </div>
+                        <div class="checkboxContainer">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveSubtitleEs" data-rtve-lang="es" type="checkbox" is="emby-checkbox" />
+                                <span>Español (es)</span>
+                            </label>
+                            <label class="emby-checkbox-label">
+                                <input id="RtveSubtitleEn" data-rtve-lang="en" type="checkbox" is="emby-checkbox" />
+                                <span>Inglés (en)</span>
+                            </label>
+                            <label class="emby-checkbox-label">
+                                <input id="RtveSubtitleCa" data-rtve-lang="ca" type="checkbox" is="emby-checkbox" />
+                                <span>Catalán (ca)</span>
+                            </label>
+                            <label class="emby-checkbox-label">
+                                <input id="RtveSubtitleGl" data-rtve-lang="gl" type="checkbox" is="emby-checkbox" />
+                                <span>Gallego (gl)</span>
+                            </label>
+                            <label class="emby-checkbox-label">
+                                <input id="RtveSubtitleEu" data-rtve-lang="eu" type="checkbox" is="emby-checkbox" />
+                                <span>Euskera (eu)</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Puedes marcar varios idiomas: se escribe un <code>.srt</code> por idioma junto a
+                                cada episodio. Por defecto no se descarga ninguno.
                             </div>
                         </div>
                     </div>
@@ -100,15 +142,6 @@
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
-                                <input id="RtveWriteSubtitles" type="checkbox" is="emby-checkbox" />
-                                <span>Descargar subtítulos</span>
-                            </label>
-                            <div class="fieldDescription">
-                                Descarga los WebVTT de RTVE y los convierte a SRT junto al archivo .strm.
-                            </div>
-                        </div>
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
                                 <input id="RtveDeleteObsolete" type="checkbox" is="emby-checkbox" />
                                 <span>Borrar episodios que ya no están en el catálogo</span>
                             </label>
@@ -138,7 +171,17 @@
             var RtvePlayConfig = {
                 pluginId: '3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913',
                 taskKey: 'RtvePlayRefresh',
-                programs: []
+                programs: [],
+                catalog: {
+                    items: [],
+                    page: 1,
+                    totalPages: 1,
+                    totalItems: 0,
+                    hasMore: false,
+                    query: '',
+                    pageSize: 40,
+                    selected: {}
+                }
             };
 
             function rtveStatus(message) {
@@ -152,6 +195,28 @@
             function rtveInt(value, fallback) {
                 var parsed = parseInt(value, 10);
                 return isNaN(parsed) ? fallback : parsed;
+            }
+
+            function rtveSubtitleCheckboxes() {
+                return Array.prototype.slice.call(document.querySelectorAll('#RtvePlayConfigPage [data-rtve-lang]'));
+            }
+
+            function rtveSelectedLanguages() {
+                return rtveSubtitleCheckboxes()
+                    .filter(function (input) { return input.checked; })
+                    .map(function (input) { return input.getAttribute('data-rtve-lang'); });
+            }
+
+            // The language check boxes are only meaningful when subtitles are enabled, and they are
+            // ignored when "all languages" is ticked.
+            function rtveSyncSubtitleControls() {
+                var download = document.querySelector('#RtveWriteSubtitles').checked;
+                var all = document.querySelector('#RtveSubtitleAll').checked;
+
+                document.querySelector('#RtveSubtitleAll').disabled = !download;
+                rtveSubtitleCheckboxes().forEach(function (input) {
+                    input.disabled = !download || all;
+                });
             }
 
             // The server may serialize the DTOs as PascalCase or camelCase depending on the
@@ -179,7 +244,20 @@
                     document.querySelector('#RtveDestinationPath').value = rtveField(config, 'destinationPath') || '';
                     document.querySelector('#RtveRefreshInterval').value = rtveField(config, 'refreshIntervalHours') || 12;
                     document.querySelector('#RtveMaxItems').value = rtveField(config, 'maxItemsPerProgram') || 0;
-                    document.querySelector('#RtveSubtitleLanguage').value = rtveField(config, 'subtitleLanguage') || 'none';
+                    var languages = rtveField(config, 'subtitleLanguages') || [];
+                    if (languages.length === 0) {
+                        // Migration from versions that stored a single language.
+                        var legacyLanguage = rtveField(config, 'subtitleLanguage');
+                        if (legacyLanguage && legacyLanguage !== 'none') {
+                            languages = [legacyLanguage];
+                        }
+                    }
+
+                    rtveSubtitleCheckboxes().forEach(function (input) {
+                        input.checked = languages.indexOf(input.getAttribute('data-rtve-lang')) >= 0;
+                    });
+                    document.querySelector('#RtveSubtitleAll').checked = rtveField(config, 'downloadAllSubtitleLanguages') === true;
+                    rtveSyncSubtitleControls();
                     document.querySelector('#RtvePreferMp4').checked = rtveField(config, 'preferMp4') !== false;
                     document.querySelector('#RtveFilterDrm').checked = rtveField(config, 'filterDrm') !== false;
                     document.querySelector('#RtveWriteNfo').checked = rtveField(config, 'writeNfo') !== false;
@@ -187,7 +265,7 @@
                     document.querySelector('#RtveDeleteObsolete').checked = rtveField(config, 'deleteObsolete') === true;
 
                     rtveRenderPrograms();
-                    rtveRenderSearchResults([]);
+                    rtveRenderCatalog();
                     rtveStatus('');
                     Dashboard.hideLoadingMsg();
                 }, function () {
@@ -204,7 +282,10 @@
                     config.DestinationPath = document.querySelector('#RtveDestinationPath').value.trim();
                     config.RefreshIntervalHours = rtveInt(document.querySelector('#RtveRefreshInterval').value, 12);
                     config.MaxItemsPerProgram = rtveInt(document.querySelector('#RtveMaxItems').value, 0);
-                    config.SubtitleLanguage = document.querySelector('#RtveSubtitleLanguage').value;
+                    config.SubtitleLanguages = rtveSelectedLanguages();
+                    config.DownloadAllSubtitleLanguages = document.querySelector('#RtveSubtitleAll').checked;
+                    // Legacy single-language setting: cleared once the list is used.
+                    config.SubtitleLanguage = '';
                     config.PreferMp4 = document.querySelector('#RtvePreferMp4').checked;
                     config.FilterDrm = document.querySelector('#RtveFilterDrm').checked;
                     config.WriteNfo = document.querySelector('#RtveWriteNfo').checked;
@@ -228,6 +309,15 @@
                     element.textContent = text;
                 }
                 return element;
+            }
+
+            // Jellyfin's checkbox is a customized built-in element: it has to be created with the
+            // "is" option to be upgraded; if the browser ignores it, a plain checkbox still works.
+            function rtveCheckbox() {
+                var input = document.createElement('input', { is: 'emby-checkbox' });
+                input.type = 'checkbox';
+                input.className = 'emby-checkbox';
+                return input;
             }
 
             function rtveRow(title, subtitle, actionLabel, actionClass, onAction) {
@@ -272,43 +362,189 @@
                 });
             }
 
-            function rtveRenderSearchResults(results) {
-                var container = document.querySelector('#RtveSearchResults');
-                container.innerHTML = '';
-                if (!results || results.length === 0) {
-                    return;
-                }
-
-                container.appendChild(rtveElement('h3', 'sectionTitle', 'Resultados de la búsqueda'));
-                results.forEach(function (result) {
-                    var resultId = rtveField(result, 'id');
-                    container.appendChild(rtveRow(
-                        rtveField(result, 'title') || resultId,
-                        rtveField(result, 'url') || ('id ' + resultId),
-                        'Añadir',
-                        'button-submit',
-                        function () { rtveAddResolved(result, true); }));
+            function rtveCatalogIsAdded(programId) {
+                return RtvePlayConfig.programs.some(function (item) {
+                    return item.Id === programId;
                 });
             }
 
-            function rtveAddResolved(program, fromSearch) {
-                var programId = rtveField(program, 'id');
-                var programTitle = rtveField(program, 'title') || programId;
-                var exists = RtvePlayConfig.programs.some(function (item) {
-                    return item.Id === programId;
+            function rtveLoadCatalog(query, page) {
+                var catalog = RtvePlayConfig.catalog;
+                catalog.query = query || '';
+                catalog.page = page || 1;
+                catalog.selected = {};
+
+                Dashboard.showLoadingMsg();
+                ApiClient.getJSON(rtveUrl('Programs/List', {
+                    query: catalog.query,
+                    page: catalog.page,
+                    size: catalog.pageSize
+                })).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    catalog.items = rtveField(result, 'items') || [];
+                    catalog.page = rtveField(result, 'page') || catalog.page;
+                    catalog.totalPages = rtveField(result, 'totalPages') || 1;
+                    catalog.totalItems = rtveField(result, 'totalItems') || catalog.items.length;
+                    catalog.hasMore = rtveField(result, 'hasMore') === true || catalog.page < catalog.totalPages;
+
+                    if (catalog.items.length === 0) {
+                        rtveStatus('RTVE no ha devuelto ningún programa' + (catalog.query ? ' para «' + catalog.query + '».' : '.'));
+                    } else {
+                        rtveStatus('');
+                    }
+
+                    rtveRenderCatalog();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    rtveStatus('No se pudo cargar el catálogo de programas de RTVE.');
+                });
+            }
+
+            function rtveRenderCatalog() {
+                var container = document.querySelector('#RtveCatalog');
+                var catalog = RtvePlayConfig.catalog;
+                container.innerHTML = '';
+
+                if (!catalog.items.length) {
+                    return;
+                }
+
+                container.appendChild(rtveElement(
+                    'h3',
+                    'sectionTitle',
+                    catalog.query ? 'Programas que coinciden con «' + catalog.query + '»' : 'Todos los programas'));
+
+                var selectedCount = Object.keys(catalog.selected).filter(function (id) {
+                    return catalog.selected[id];
+                }).length;
+
+                var toolbar = rtveElement('div', '');
+
+                var selectPage = rtveCheckbox();
+                selectPage.checked = catalog.items.every(function (item) {
+                    var id = rtveField(item, 'id');
+                    return rtveCatalogIsAdded(id) || catalog.selected[id] === true;
+                });
+                selectPage.addEventListener('change', function () {
+                    catalog.items.forEach(function (item) {
+                        var id = rtveField(item, 'id');
+                        if (!rtveCatalogIsAdded(id)) {
+                            catalog.selected[id] = selectPage.checked;
+                        }
+                    });
+                    rtveRenderCatalog();
                 });
 
-                if (exists) {
-                    rtveStatus('Ese programa ya está en la lista.');
-                } else {
-                    RtvePlayConfig.programs.push({ Id: programId, Title: programTitle });
-                    rtveRenderPrograms();
-                    rtveStatus('Añadido «' + programTitle + '». Recuerda guardar los cambios.');
+                var selectLabel = rtveElement('label', 'emby-checkbox-label');
+                selectLabel.appendChild(selectPage);
+                selectLabel.appendChild(rtveElement('span', '', 'Seleccionar la página (' + catalog.items.length + ')'));
+                toolbar.appendChild(selectLabel);
+
+                var addButton = rtveElement(
+                    'button',
+                    'emby-button raised button-submit',
+                    'Añadir seleccionados (' + selectedCount + ')');
+                addButton.type = 'button';
+                addButton.disabled = selectedCount === 0;
+                addButton.addEventListener('click', rtveAddSelected);
+                toolbar.appendChild(addButton);
+
+                container.appendChild(toolbar);
+
+                catalog.items.forEach(function (item) {
+                    var id = rtveField(item, 'id');
+                    var title = rtveField(item, 'title') || id;
+                    var added = rtveCatalogIsAdded(id);
+
+                    var row = rtveElement('div', 'listItem listItem-border');
+
+                    var label = rtveElement('label', 'emby-checkbox-label');
+                    var checkbox = rtveCheckbox();
+                    checkbox.checked = added || catalog.selected[id] === true;
+                    checkbox.disabled = added;
+                    checkbox.addEventListener('change', function () {
+                        catalog.selected[id] = checkbox.checked;
+                        rtveRenderCatalog();
+                    });
+                    label.appendChild(checkbox);
+                    row.appendChild(label);
+
+                    var body = rtveElement('div', 'listItemBody');
+                    body.appendChild(rtveElement('h3', 'listItemBodyText', title));
+                    body.appendChild(rtveElement(
+                        'div',
+                        'secondary listItemBodyText',
+                        added ? 'id ' + id + ' · ya añadido' : 'id ' + id));
+                    row.appendChild(body);
+
+                    container.appendChild(row);
+                });
+
+                container.appendChild(rtveElement(
+                    'div',
+                    'fieldDescription',
+                    'Página ' + catalog.page + ' de ' + catalog.totalPages + ' · ' + catalog.totalItems + ' programas en el catálogo de RTVE'));
+
+                var pager = rtveElement('div', '');
+
+                var previous = rtveElement('button', 'emby-button raised block', 'Anterior');
+                previous.type = 'button';
+                previous.disabled = catalog.page <= 1;
+                previous.addEventListener('click', function () {
+                    rtveLoadCatalog(catalog.query, catalog.page - 1);
+                });
+                pager.appendChild(previous);
+
+                var next = rtveElement('button', 'emby-button raised block', 'Siguiente');
+                next.type = 'button';
+                next.disabled = !catalog.hasMore;
+                next.addEventListener('click', function () {
+                    rtveLoadCatalog(catalog.query, catalog.page + 1);
+                });
+                pager.appendChild(next);
+
+                container.appendChild(pager);
+            }
+
+            function rtveAddSelected() {
+                var catalog = RtvePlayConfig.catalog;
+                var added = 0;
+
+                catalog.items.forEach(function (item) {
+                    var id = rtveField(item, 'id');
+                    if (catalog.selected[id] !== true || rtveCatalogIsAdded(id)) {
+                        return;
+                    }
+
+                    RtvePlayConfig.programs.push({ Id: id, Title: rtveField(item, 'title') || id });
+                    added++;
+                });
+
+                catalog.selected = {};
+                rtveRenderPrograms();
+                rtveRenderCatalog();
+
+                if (added === 0) {
+                    rtveStatus('No hay ningún programa seleccionado.');
+                    return;
                 }
 
-                if (fromSearch) {
-                    document.querySelector('#RtveSearchResults').innerHTML = '';
+                rtveStatus('Añadido(s) ' + added + ' programa(s). Recuerda guardar los cambios.');
+            }
+
+            function rtveAddResolved(program) {
+                var programId = rtveField(program, 'id');
+                var programTitle = rtveField(program, 'title') || programId;
+
+                if (rtveCatalogIsAdded(programId)) {
+                    rtveStatus('Ese programa ya está en la lista.');
+                    return;
                 }
+
+                RtvePlayConfig.programs.push({ Id: programId, Title: programTitle });
+                rtveRenderPrograms();
+                rtveRenderCatalog();
+                rtveStatus('Añadido «' + programTitle + '». Recuerda guardar los cambios.');
             }
             function rtveResolve(value) {
                 if (!value) {
@@ -323,7 +559,7 @@
                         rtveStatus('RTVE no ha devuelto ningún programa para «' + value + '».');
                         return;
                     }
-                    rtveAddResolved(program, false);
+                    rtveAddResolved(program);
                     document.querySelector('#RtveProgramInput').value = '';
                 }, function () {
                     Dashboard.hideLoadingMsg();
@@ -338,18 +574,47 @@
                     return;
                 }
 
+                rtveLoadCatalog(query, 1);
+            }
+
+            function rtveListPrograms() {
+                document.querySelector('#RtveProgramInput').value = '';
+                rtveLoadCatalog('', 1);
+            }
+
+            function rtveCheckPath() {
+                var path = document.querySelector('#RtveDestinationPath').value.trim();
+                var target = document.querySelector('#RtvePathStatus');
+
+                if (!path) {
+                    target.textContent = 'Escribe la carpeta de destino.';
+                    return;
+                }
+
                 Dashboard.showLoadingMsg();
-                ApiClient.getJSON(rtveUrl('Programs/Search', { query: query, limit: 10 })).then(function (results) {
+                ApiClient.getJSON(rtveUrl('Path/Check', { path: path })).then(function (result) {
                     Dashboard.hideLoadingMsg();
-                    if (!results || results.length === 0) {
-                        rtveStatus('Sin resultados para «' + query + '».');
+
+                    var writable = rtveField(result, 'writable') === true;
+                    var exists = rtveField(result, 'exists') === true;
+                    var error = rtveField(result, 'error');
+                    var checkedPath = rtveField(result, 'path') || path;
+                    var suggestions = rtveField(result, 'suggestions') || [];
+
+                    if (writable) {
+                        target.textContent = 'Correcto: Jellyfin puede escribir en «' + checkedPath + '».';
                         return;
                     }
-                    rtveRenderSearchResults(results);
-                    rtveStatus('');
+
+                    var message = 'No se puede escribir en «' + checkedPath + '»: '
+                        + (error || (exists ? 'la carpeta no admite escritura.' : 'la carpeta no existe.'));
+                    if (suggestions.length > 0) {
+                        message += ' Carpetas escribibles detectadas: ' + suggestions.join(', ') + '.';
+                    }
+                    target.textContent = message;
                 }, function () {
                     Dashboard.hideLoadingMsg();
-                    rtveStatus('La búsqueda ha fallado. Inténtalo de nuevo más tarde.');
+                    target.textContent = 'No se pudo comprobar la carpeta.';
                 });
             }
 
@@ -379,7 +644,12 @@
                 });
 
                 document.querySelector('#RtveSearchPrograms').addEventListener('click', rtveSearch);
+                document.querySelector('#RtveListPrograms').addEventListener('click', rtveListPrograms);
+                document.querySelector('#RtveCheckPath').addEventListener('click', rtveCheckPath);
                 document.querySelector('#RtveRunNow').addEventListener('click', rtveRunNow);
+
+                document.querySelector('#RtveWriteSubtitles').addEventListener('change', rtveSyncSubtitleControls);
+                document.querySelector('#RtveSubtitleAll').addEventListener('change', rtveSyncSubtitleControls);
 
                 document.querySelector('#RtveProgramInput').addEventListener('keydown', function (event) {
                     if (event.key === 'Enter') {

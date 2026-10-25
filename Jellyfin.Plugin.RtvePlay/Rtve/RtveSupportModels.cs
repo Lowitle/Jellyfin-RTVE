@@ -98,3 +98,18 @@ public sealed class RtveSubtitle
 /// <param name="Url">Program page URL.</param>
 /// <param name="ImageUrl">Program poster URL.</param>
 public sealed record RtveProgramSummary(string Id, string Title, string? Url, string? ImageUrl);
+
+/// <summary>
+/// A page of the RTVE program catalog.
+/// </summary>
+/// <param name="Items">Programs of the page.</param>
+/// <param name="Page">Current page (1 based).</param>
+/// <param name="TotalPages">Pages reported by RTVE (best effort when a title filter is used).</param>
+/// <param name="TotalItems">Programs reported by RTVE (best effort when a title filter is used).</param>
+/// <param name="HasMore">Whether another page can be requested.</param>
+public sealed record RtveProgramPage(
+    IReadOnlyList<RtveProgramSummary> Items,
+    int Page,
+    int TotalPages,
+    int TotalItems,
+    bool HasMore);

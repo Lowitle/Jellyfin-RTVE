@@ -21,6 +21,8 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
 
 - **Programas configurables**: se indica el id numérico (`111570`), el slug de la página (`saber-vivir`)
   o la URL completa del programa, y el plugin resuelve el resto.
+- **Catálogo navegable**: el botón **Ver todos los programas** lista el catálogo paginado de RTVE
+  (solo programas de televisión) con casillas para añadir varios de golpe.
 - **Series y episodios**: agrupa los vídeos de cada programa en una serie, con temporadas y numeración
   de episodios (usa `seasonNumber`/`episode` de RTVE cuando existen y, si no, ordena por fecha).
 - **MP4 progresivo con fallback a HLS**: intenta primero la URL MP4 (`PreferMp4`), lo que permite *seek*
@@ -28,7 +30,10 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
 - **Metadatos**: `tvshow.nfo` y `<episodio>.nfo` con título, sinopsis, fecha de emisión, duración,
   géneros y director; `poster.jpg` y `fanart.jpg` desde las imágenes del programa.
 - **Subtítulos** (opcionales): descarga los WebVTT de RTVE y los convierte a SRT junto a cada episodio
-  (`*.es.srt`, `*.en.srt`…). Por defecto no se descarga ninguno: se elige el idioma en la configuración.
+  (`*.es.srt`, `*.en.srt`…). Por defecto no se descarga ninguno: se marcan con casillas uno o varios
+  idiomas, o **todos los idiomas disponibles** para bajar cada pista que publique RTVE.
+- **Comprobación de la carpeta de destino**: el botón **Comprobar carpeta** dice si Jellyfin puede
+  escribir en ella y, si no, propone carpetas escribibles del servidor.
 - **Filtro de DRM**: omite el contenido protegido, que no se puede reproducir con `.strm`.
 - **Tarea programada** `Actualizar RTVE Play` con intervalo configurable y ejecución al arrancar, además
   de un botón **Ejecutar ahora** en la página de configuración.
@@ -110,7 +115,9 @@ git push origin v1.0.0.0
 ```
 
 El tag lanzó el workflow **Release**: build + 104 pruebas, release `v1.0.0.0` con `rtveplay_1.0.0.0.zip` y
-commit automático del `manifest.json` (`checksum` MD5 `926CE03042BAD6AF413E533CBA058404`).
+commit automático del `manifest.json` (`checksum` MD5 `926CE03042BAD6AF413E533CBA058404`). La versión
+**1.0.1.0** añade los subtítulos multi-idioma, el listado paginado de programas y la comprobación de la
+carpeta de destino.
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
 publica el tag (`git tag v1.0.1.0; git push origin v1.0.1.0`). El manifiesto y la release se actualizan solos.
@@ -125,21 +132,32 @@ La página del plugin está en **Panel de control → Plugins → RTVE Play**.
 | --- | --- |
 | **Id, slug o URL del programa** | Acepta `111570`, `saber-vivir` o `https://www.rtve.es/play/videos/saber-vivir/`. |
 | **Añadir programa** | Resuelve la referencia contra la API de RTVE y la guarda con su título. |
-| **Buscar por título** | Busca en el catálogo y permite añadir el programa con un clic (solo programas de televisión: los de radio de RTVE Play se descartan). |
+| **Buscar por título** | Filtra el catálogo por ese texto en el panel del listado (solo programas de televisión: los de radio de RTVE Play se descartan). |
+| **Ver todos los programas** | Lista el catálogo completo **paginado**: marca las casillas que quieras y pulsa **Añadir seleccionados**. También hay «Seleccionar la página» y botones *Anterior* / *Siguiente*. |
+
+Los programas ya añadidos aparecen marcados en el listado como *ya añadido* y no se pueden volver a
+seleccionar. Recuerda pulsar **Guardar** al terminar.
 
 ### Biblioteca y opciones
 
 | Campo | Por defecto | Descripción |
 | --- | --- | --- |
 | **Carpeta de destino** | *(vacío)* | Ruta absoluta tal y como la ve el servidor. Debe ser una carpeta propia añadida como biblioteca de tipo *Programas de TV* (ver abajo). |
+| **Comprobar carpeta** | — | Comprueba que la carpeta existe y que Jellyfin puede escribir en ella; si falla, propone carpetas escribibles del servidor. |
 | **Intervalo de actualización (horas)** | `12` | Periodicidad de la tarea programada (1–168). |
 | **Máximo de vídeos por programa** | `0` | Limita cuántos episodios se replican por programa; `0` = sin límite. |
-| **Idioma de los subtítulos** | *no descargar* | `none` por defecto. Puedes elegir `es`, `en`, `ca`, `gl` o `eu`: se descarga ese idioma de los WebVTT de RTVE. |
 | **Preferir MP4 progresivo** | activado | Usa MP4 directo cuando existe (permite *seek*); si no, HLS. |
 | **Omitir vídeos protegidos con DRM** | activado | Recomendado: un `.strm` no puede reproducir contenido con DRM. |
 | **Escribir metadatos .nfo** | activado | Genera `tvshow.nfo` y un `.nfo` por episodio. |
-| **Descargar subtítulos** | activado | Convierte los WebVTT de RTVE a SRT del idioma elegido; si el idioma es *no descargar*, no se escribe ningún `.srt`. |
 | **Borrar episodios que ya no están en el catálogo** | desactivado | Elimina `.strm`/`.nfo`/`.srt` sobrantes; úsalo solo si la carpeta es exclusiva del plugin. |
+
+### Subtítulos
+
+| Campo | Por defecto | Descripción |
+| --- | --- | --- |
+| **Descargar subtítulos** | activado | Descarga los WebVTT de RTVE y los convierte a SRT junto al `.strm`. Sin idiomas marcados no se escribe ningún `.srt`. |
+| **Todos los idiomas disponibles de cada vídeo** | desactivado | Descarga todas las pistas que publique RTVE para cada episodio (ignora las casillas de idioma). |
+| **Español / Inglés / Catalán / Gallego / Euskera** | ninguno | Se pueden marcar **varios**: se escribe un `.srt` por idioma (`*.es.srt`, `*.en.srt`…). Las casillas se deshabilitan si no se descargan subtítulos o si está activo «todos los idiomas». |
 
 El botón **Ejecutar ahora** lanza la tarea sin esperar al siguiente ciclo.
 
@@ -161,6 +179,41 @@ Jellyfin. Por eso lo más limpio es darle una carpeta propia y añadirla como **
   (`/media/rtve-play`) también sirve: solo tienes que añadirla como biblioteca independiente para no
   mezclarla con tus series.
 
+### La tarea falla con «Access to the path ... is denied»
+
+```
+[ERR] Error executing Scheduled Task
+System.UnauthorizedAccessException: Access to the path '/media/RTVE Play/' is denied.
+```
+
+Significa que la *Carpeta de destino* **no existe o no es escribible dentro del contenedor**. El plugin
+no escribe en el host: escribe en la ruta que ve Jellyfin, así que esa ruta tiene que estar montada.
+
+1. Pulsa **Comprobar carpeta** en la página del plugin: el resultado dice si existe, si es escribible y,
+   si no lo es, qué carpetas del servidor sí admiten escritura.
+2. Añade un volumen dedicado en el `docker-compose.yml` (o en `docker run`):
+
+   ```yaml
+   services:
+     jellyfin:
+       volumes:
+         - /srv/rtve-play:/media/rtve-play      # host:contenedor
+   ```
+
+3. Escribe en *Carpeta de destino* la ruta **del contenedor** (`/media/rtve-play`), sin la del host.
+4. Comprueba los permisos del usuario de Jellyfin (`PUID`/`PGID` en la imagen oficial):
+
+   ```bash
+   mkdir -p /srv/rtve-play
+   sudo chown -R 1000:1000 /srv/rtve-play
+   ```
+
+5. Si la carpeta cuelga de un recurso de red (SMB/NFS), verifica que el montaje esté activo y permita
+   crear archivos: algunos montajes se publican en solo lectura (`ro`).
+
+En una instalación nativa basta con que el usuario que ejecuta Jellyfin tenga permiso de escritura en la
+carpeta; el mensaje de la tarea indica ahora la ruta comprobada y las carpetas alternativas detectadas.
+
 ## Estructura generada
 
 ```
@@ -172,7 +225,7 @@ Jellyfin. Por eso lo más limpio es darle una carpeta propia y añadirla como **
     └── Season 1/
         ├── Saber Vivir - S01E01 - Título del episodio.strm
         ├── Saber Vivir - S01E01 - Título del episodio.nfo
-        └── Saber Vivir - S01E01 - Título del episodio.es.srt   (solo si eliges idioma de subtítulos)
+        └── Saber Vivir - S01E01 - Título del episodio.es.srt   (uno por idioma marcado)
 ```
 
 Los nombres se sanean (caracteres prohibidos, longitud máxima) y se desambiguan con `[2]`, `[3]`… cuando
@@ -190,7 +243,8 @@ dos episodios comparten título. Los archivos solo se reescriben si el contenido
    y pagina sus vídeos con `/api/programas/{id}/videos?type=39816`.
 2. Cada vídeo se resuelve con el módulo ZTNR de RTVE (`crypto` + `ztnr`), que devuelve las variantes
    MP4/HLS; `ZtnrResolver.SelectPreferred` elige la mejor según `PreferMp4`.
-3. Los WebVTT se descargan y se convierten a SRT con `VttToSrt`.
+3. Los WebVTT de cada idioma marcado se descargan y se convierten a SRT con `VttToSrt` (un `.srt` por
+   idioma; con «todos los idiomas» se guarda cada pista publicada).
 4. `StrmLibrary` escribe los `.strm`, `.nfo` y `.srt`, y se notifica a `ILibraryMonitor` para que
    Jellyfin refresque la carpeta del programa.
 
@@ -207,7 +261,7 @@ dos episodios comparten título. Los archivos solo se reescriben si el contenido
 
 ```powershell
 dotnet build                     # compila plugin y tests (Jellyfin.Plugin.RtvePlay.sln)
-dotnet test                      # 104 pruebas (xunit)
+dotnet test                      # 121 pruebas (xunit)
 pwsh ./package.ps1               # genera dist/rtveplay_1.0.0.0.zip + SHA256
 # Windows PowerShell 5.1: powershell -ExecutionPolicy Bypass -File .\package.ps1
 ```

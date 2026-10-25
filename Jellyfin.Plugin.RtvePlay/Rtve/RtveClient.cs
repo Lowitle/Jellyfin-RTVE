@@ -15,6 +15,11 @@ public sealed partial class RtveClient
     /// </summary>
     public const int PageSize = 100;
 
+    /// <summary>
+    /// Maximum number of programs returned when the catalog is filtered by title.
+    /// </summary>
+    private const int MaxFilteredMatches = 500;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient;

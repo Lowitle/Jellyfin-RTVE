@@ -36,7 +36,9 @@ public class PluginConfiguration : BasePluginConfiguration
         WriteNfo = true;
         WriteSubtitles = true;
         DeleteObsolete = false;
-        SubtitleLanguage = "none";
+        SubtitleLanguages = new List<string>();
+        DownloadAllSubtitleLanguages = false;
+        SubtitleLanguage = string.Empty;
         MaxItemsPerProgram = 0;
     }
 
@@ -81,10 +83,26 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool DeleteObsolete { get; set; }
 
     /// <summary>
-    /// Gets or sets the preferred subtitle language ("es", "en", "gl", "ca", "eu" or "none").
+    /// Gets or sets the subtitle languages to download ("es", "en", "ca", "gl", "eu").
     /// </summary>
     /// <remarks>
-    /// The default is <c>none</c>: subtitles are only downloaded when the user picks a language.
+    /// The list is empty by default: subtitles are only downloaded when the user ticks at least one
+    /// language. When <see cref="DownloadAllSubtitleLanguages"/> is enabled this list is ignored.
+    /// </remarks>
+    public List<string> SubtitleLanguages { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether every subtitle track published by RTVE is downloaded,
+    /// regardless of <see cref="SubtitleLanguages"/>.
+    /// </summary>
+    public bool DownloadAllSubtitleLanguages { get; set; }
+
+    /// <summary>
+    /// Gets or sets the subtitle language of plugin versions before 1.0.1.0 ("es", "en", "gl", "ca", "eu" or "none").
+    /// </summary>
+    /// <remarks>
+    /// Kept only to migrate existing configurations into <see cref="SubtitleLanguages"/>; the
+    /// configuration page clears it as soon as the settings are saved.
     /// </remarks>
     public string SubtitleLanguage { get; set; }
 

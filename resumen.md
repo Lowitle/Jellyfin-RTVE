@@ -39,7 +39,7 @@ Filtra/verifica por item: saltar si solo hay DASH-DRM (no tocar DRM). Subtítulo
 - **Sin credenciales:** el token es anónimo; no hace falta cuenta de RTVE (el flag `requireLogged` no bloquea el token).
 - **DRM:** no reproducir contenido solo-DASH-DRM; usar el HLS en claro. Verificar por item.
 - **Numeración/metadatos:** usar temporada/episodio del catálogo cuando exista; `.nfo` propios; metadatos online desactivados.
-- **Config UI:** lista de programas (slug o id), carpeta destino (variante B), intervalo, filtrar DRM sí/no, idioma de subtítulos, botón "actualizar ahora".
+- **Config UI:** lista de programas (slug o id) + listado paginado de todo el catálogo con selección múltiple, carpeta destino (variante B), intervalo, filtrar DRM sí/no, idiomas de subtítulos (casillas, varios o todos), botón "actualizar ahora" y "comprobar carpeta".
 - **Descifrado:** port de `_decrypt_url` a C# (~40 líneas).
 
 ## Entorno de destino
