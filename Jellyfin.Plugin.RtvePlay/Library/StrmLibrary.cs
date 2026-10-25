@@ -11,29 +11,40 @@ public static class StrmLibrary
     private static readonly UTF8Encoding Utf8NoBom = new(false);
 
     /// <summary>
+    /// Gets the folder that holds a series.
+    /// </summary>
+    /// <param name="rootPath">Folder the series are written to.</param>
+    /// <param name="seriesTitle">Series title.</param>
+    /// <returns>The series folder.</returns>
+    public static string SeriesFolder(string rootPath, string seriesTitle)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(seriesTitle);
+
+        return Path.Combine(rootPath, LibraryNaming.SeriesFolderName(seriesTitle));
+    }
+
+    /// <summary>
     /// Writes the episodes of a series into <paramref name="rootPath"/>.
     /// </summary>
     /// <param name="rootPath">Library root folder.</param>
-    /// <param name="seriesTitle">Series title.</param>
-    /// <param name="programId">RTVE program id.</param>
-    /// <param name="seriesPlot">Series plot.</param>
+    /// <param name="series">Series metadata (title, plot, genres, tags...).</param>
     /// <param name="episodes">Episodes to write.</param>
     /// <param name="options">Write options.</param>
     /// <returns>The result of the operation.</returns>
     public static LibraryWriteResult Write(
         string rootPath,
-        string seriesTitle,
-        string programId,
-        string? seriesPlot,
+        LibrarySeries series,
         IEnumerable<LibraryEpisode> episodes,
         LibraryWriteOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(seriesTitle);
+        ArgumentNullException.ThrowIfNull(series);
+        ArgumentException.ThrowIfNullOrWhiteSpace(series.Title);
         ArgumentNullException.ThrowIfNull(episodes);
         ArgumentNullException.ThrowIfNull(options);
 
-        var seriesFolder = Path.Combine(rootPath, LibraryNaming.SeriesFolderName(seriesTitle));
+        var seriesFolder = SeriesFolder(rootPath, series.Title);
         Directory.CreateDirectory(seriesFolder);
 
         var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -44,7 +55,7 @@ public static class StrmLibrary
         {
             filesWritten += WriteText(
                 Path.Combine(seriesFolder, "tvshow.nfo"),
-                NfoBuilder.BuildSeries(seriesTitle, programId, seriesPlot),
+                NfoBuilder.BuildSeries(series),
                 written) ? 1 : 0;
         }
 
@@ -58,7 +69,7 @@ public static class StrmLibrary
             Directory.CreateDirectory(seasonFolder);
 
             var baseName = Unique(
-                LibraryNaming.EpisodeFileName(seriesTitle, episode.Season, episode.Episode, episode.Title),
+                LibraryNaming.EpisodeFileName(series.Title, episode.Season, episode.Episode, episode.Title),
                 usedNames);
 
             var strmPath = Path.Combine(seasonFolder, baseName + ".strm");
@@ -68,7 +79,7 @@ public static class StrmLibrary
             {
                 filesWritten += WriteText(
                     Path.Combine(seasonFolder, baseName + ".nfo"),
-                    NfoBuilder.BuildEpisode(seriesTitle, episode),
+                    NfoBuilder.BuildEpisode(series.Title, episode),
                     written) ? 1 : 0;
             }
 

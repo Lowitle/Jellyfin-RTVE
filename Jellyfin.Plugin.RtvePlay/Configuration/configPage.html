@@ -56,6 +56,22 @@
                             </button>
                             <div id="RtvePathStatus" class="fieldDescription"></div>
                         </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveOrganizeSections" type="checkbox" is="emby-checkbox" />
+                                <span>Organizar cada programa en una subcarpeta según su tipo</span>
+                            </label>
+                            <div class="fieldDescription">
+                                Dentro de la carpeta de destino se usan las subcarpetas
+                                <code>peliculas</code>, <code>series-de-tv</code>, <code>documentales</code>,
+                                <code>magacines</code>, <code>programas-de-tv</code>, <code>noticias</code>,
+                                <code>infantil</code>, <code>anime</code>, <code>podcast</code>,
+                                <code>archivo</code> y <code>otros</code>; Jellyfin las indexa todas con la
+                                misma biblioteca de «Programas de TV». La primera vez que se activa, los
+                                programas que ya estaban sueltos en la raíz se mueven a su subcarpeta, y
+                                Jellyfin los verá como series nuevas (puede perderse el estado de visto).
+                            </div>
+                        </div>
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="RtveRefreshInterval">Intervalo de actualización (horas)</label>
                             <input id="RtveRefreshInterval" type="number" is="emby-input" min="1" max="168" step="1" />
@@ -153,6 +169,20 @@
                             </label>
                             <div class="fieldDescription">
                                 Título, sinopsis, fecha de emisión, duración y carátula de cada episodio.
+                                El <code>tvshow.nfo</code> incluye además los géneros (Serie, Documental,
+                                Infantil…) y la etiqueta con el tipo exacto de programa que publica RTVE, para
+                                poder filtrar la biblioteca.
+                            </div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RtveWriteImdb" type="checkbox" is="emby-checkbox" />
+                                <span>Añadir el id de IMDb de los programas</span>
+                            </label>
+                            <div class="fieldDescription">
+                                RTVE solo lo publica para una parte del catálogo. Si Jellyfin tiene activos los
+                                metadatos de IMDb/TMDb, puede usar ese id para completar la ficha y sustituir el
+                                título o la sinopsis de RTVE. Desactívalo si prefieres conservar los datos del plugin.
                             </div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -294,8 +324,10 @@
                     document.querySelector('#RtvePreferMp4').checked = rtveField(config, 'preferMp4') !== false;
                     document.querySelector('#RtveFilterDrm').checked = rtveField(config, 'filterDrm') !== false;
                     document.querySelector('#RtveWriteNfo').checked = rtveField(config, 'writeNfo') !== false;
+                    document.querySelector('#RtveWriteImdb').checked = rtveField(config, 'writeImdbIds') !== false;
                     document.querySelector('#RtveWriteSubtitles').checked = rtveField(config, 'writeSubtitles') !== false;
                     document.querySelector('#RtveDeleteObsolete').checked = rtveField(config, 'deleteObsolete') === true;
+                    document.querySelector('#RtveOrganizeSections').checked = rtveField(config, 'organizeSections') !== false;
 
                     rtveRenderPrograms();
                     rtveRenderCatalog();
@@ -322,8 +354,10 @@
                     config.PreferMp4 = document.querySelector('#RtvePreferMp4').checked;
                     config.FilterDrm = document.querySelector('#RtveFilterDrm').checked;
                     config.WriteNfo = document.querySelector('#RtveWriteNfo').checked;
+                    config.WriteImdbIds = document.querySelector('#RtveWriteImdb').checked;
                     config.WriteSubtitles = document.querySelector('#RtveWriteSubtitles').checked;
                     config.DeleteObsolete = document.querySelector('#RtveDeleteObsolete').checked;
+                    config.OrganizeSections = document.querySelector('#RtveOrganizeSections').checked;
 
                     return ApiClient.updatePluginConfiguration(RtvePlayConfig.pluginId, config).then(function (result) {
                         // The scheduled task reads its triggers from the saved configuration.

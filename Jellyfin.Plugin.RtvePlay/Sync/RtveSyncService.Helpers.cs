@@ -1,3 +1,7 @@
+using Jellyfin.Plugin.RtvePlay.Configuration;
+using Jellyfin.Plugin.RtvePlay.Library;
+using Jellyfin.Plugin.RtvePlay.Rtve;
+
 namespace Jellyfin.Plugin.RtvePlay.Sync;
 
 /// <summary>
@@ -5,6 +9,60 @@ namespace Jellyfin.Plugin.RtvePlay.Sync;
 /// </summary>
 public sealed partial class RtveSyncService
 {
+    /// <summary>
+    /// Builds the series metadata Jellyfin uses to classify the program. The RTVE type becomes a
+    /// genre («Serie», «Documental», «Infantil»...) so the library can be filtered by kind, and the
+    /// raw type is kept as a tag.
+    /// </summary>
+    /// <param name="configuration">Plugin configuration.</param>
+    /// <param name="program">Program metadata, when RTVE returned it.</param>
+    /// <param name="programId">RTVE program id.</param>
+    /// <param name="seriesTitle">Series title.</param>
+    /// <param name="seriesPlot">Series plot.</param>
+    /// <returns>The series metadata.</returns>
+    private static LibrarySeries BuildSeriesMetadata(
+        PluginConfiguration configuration,
+        RtveProgram? program,
+        string programId,
+        string seriesTitle,
+        string? seriesPlot)
+    {
+        var classification = ProgramClassifier.Classify(
+            program?.ProgramTypeId,
+            program?.ProgramType,
+            program?.Genres?.Select(genre => genre.Name));
+
+        return new LibrarySeries
+        {
+            Title = seriesTitle,
+            ProgramId = programId,
+            Plot = seriesPlot,
+            Genres = classification.Genres,
+            Tags = classification.Tags,
+            ImdbId = configuration.WriteImdbIds ? NormalizeImdbId(program?.ImdbId) : null,
+            Country = program?.Country
+        };
+    }
+
+    /// <summary>
+    /// Keeps the IMDb id only when RTVE publishes a well formed one ("tt0375434").
+    /// </summary>
+    /// <param name="value">Value of <c>idImdb</c>.</param>
+    /// <returns>The id, or <c>null</c> when it cannot be used as a Jellyfin provider id.</returns>
+    internal static string? NormalizeImdbId(string? value)
+    {
+        var id = value?.Trim();
+        if (string.IsNullOrEmpty(id)
+            || id.Length < 3
+            || !id.StartsWith("tt", StringComparison.OrdinalIgnoreCase)
+            || !id.All(char.IsAsciiLetterOrDigit))
+        {
+            return null;
+        }
+
+        return id.ToLowerInvariant();
+    }
+
     private static string FirstNonEmpty(params string?[] values)
         => FirstNonEmptyOrNull(values) ?? string.Empty;
 

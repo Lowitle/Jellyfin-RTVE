@@ -22,9 +22,7 @@ public sealed class StrmLibraryTests : IDisposable
     {
         var result = StrmLibrary.Write(
             _root,
-            "Saber vivir",
-            "saber-vivir",
-            "Divulgación",
+            Series("Saber vivir", "saber-vivir", "Divulgación"),
             [Episode(2, 5, "Piloto")],
             new LibraryWriteOptions());
 
@@ -48,8 +46,12 @@ public sealed class StrmLibraryTests : IDisposable
     {
         var episodes = new[] { Episode(1, 1, "Uno") };
 
-        var first = StrmLibrary.Write(_root, "Serie", "serie", null, episodes, new LibraryWriteOptions());
-        var second = StrmLibrary.Write(_root, "Serie", "serie", null, episodes, new LibraryWriteOptions());
+        var first = StrmLibrary.Write(
+            _root,
+            Series("Serie", "serie"), episodes, new LibraryWriteOptions());
+        var second = StrmLibrary.Write(
+            _root,
+            Series("Serie", "serie"), episodes, new LibraryWriteOptions());
 
         Assert.Equal(4, first.FilesWritten);
         Assert.Equal(0, second.FilesWritten);
@@ -61,9 +63,7 @@ public sealed class StrmLibraryTests : IDisposable
     {
         var result = StrmLibrary.Write(
             _root,
-            "Serie",
-            "serie",
-            null,
+            Series("Serie", "serie"),
             [Episode(1, 1, "Piloto"), Episode(1, 1, "Piloto")],
             new LibraryWriteOptions { WriteNfo = false, WriteSubtitles = false });
 
@@ -87,9 +87,7 @@ public sealed class StrmLibraryTests : IDisposable
 
         var result = StrmLibrary.Write(
             _root,
-            "Serie",
-            "serie",
-            null,
+            Series("Serie", "serie"),
             [episode],
             new LibraryWriteOptions { WriteNfo = false });
 
@@ -110,9 +108,7 @@ public sealed class StrmLibraryTests : IDisposable
 
         var result = StrmLibrary.Write(
             _root,
-            "Serie",
-            "serie",
-            null,
+            Series("Serie", "serie"),
             [episode],
             new LibraryWriteOptions { WriteNfo = false });
 
@@ -130,9 +126,7 @@ public sealed class StrmLibraryTests : IDisposable
 
         StrmLibrary.Write(
             _root,
-            "Serie",
-            "serie",
-            null,
+            Series("Serie", "serie"),
             [episode],
             new LibraryWriteOptions { WriteNfo = false });
 
@@ -148,9 +142,7 @@ public sealed class StrmLibraryTests : IDisposable
     {
         var result = StrmLibrary.Write(
             _root,
-            "Serie",
-            "serie",
-            null,
+            Series("Serie", "serie"),
             [Episode(1, 1, "Uno")],
             new LibraryWriteOptions { WriteNfo = false, WriteSubtitles = false });
 
@@ -169,9 +161,7 @@ public sealed class StrmLibraryTests : IDisposable
 
         var kept = StrmLibrary.Write(
             _root,
-            "Serie",
-            "serie",
-            null,
+            Series("Serie", "serie"),
             [Episode(1, 1, "Uno")],
             new LibraryWriteOptions { WriteNfo = false, WriteSubtitles = false, DeleteObsolete = true });
 
@@ -190,14 +180,37 @@ public sealed class StrmLibraryTests : IDisposable
 
         var result = StrmLibrary.Write(
             _root,
-            "Serie",
-            "serie",
-            null,
+            Series("Serie", "serie"),
             [Episode(1, 1, "Uno")],
             new LibraryWriteOptions { WriteNfo = false, WriteSubtitles = false });
 
         Assert.Equal(0, result.FilesRemoved);
         Assert.True(File.Exists(stale));
+    }
+
+    [Fact]
+    public void Write_PutsTheClassificationInTheTvShowNfo()
+    {
+        var series = Series("Cuéntame cómo pasó", "111570");
+        series.Genres = ["Serie", "Cultura"];
+        series.Tags = ["Series Prime Time"];
+        series.Country = "ES";
+        series.ImdbId = "tt0375434";
+
+        StrmLibrary.Write(
+            _root,
+            series,
+            [Episode(1, 1, "Uno")],
+            new LibraryWriteOptions { WriteSubtitles = false });
+
+        var nfo = File.ReadAllText(Path.Combine(_root, "Cuéntame cómo pasó", "tvshow.nfo"));
+
+        Assert.Contains("<genre>Serie</genre>", nfo, StringComparison.Ordinal);
+        Assert.Contains("<genre>Cultura</genre>", nfo, StringComparison.Ordinal);
+        Assert.Contains("<tag>Series Prime Time</tag>", nfo, StringComparison.Ordinal);
+        Assert.Contains("<tag>RTVE Play</tag>", nfo, StringComparison.Ordinal);
+        Assert.Contains("<country>ES</country>", nfo, StringComparison.Ordinal);
+        Assert.Contains("<uniqueid type=\"imdb\">tt0375434</uniqueid>", nfo, StringComparison.Ordinal);
     }
 
     public void Dispose()
@@ -207,6 +220,14 @@ public sealed class StrmLibraryTests : IDisposable
             Directory.Delete(_root, recursive: true);
         }
     }
+
+    private static LibrarySeries Series(string title, string programId, string? plot = null)
+        => new()
+        {
+            Title = title,
+            ProgramId = programId,
+            Plot = plot,
+        };
 
     private static LibraryEpisode Episode(int season, int episode, string title)
         => new()

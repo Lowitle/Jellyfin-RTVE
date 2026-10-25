@@ -12,7 +12,12 @@ public class NfoBuilderTests
     [Fact]
     public void BuildSeries_WritesTheTvShowFields()
     {
-        var document = XDocument.Parse(NfoBuilder.BuildSeries("Saber vivir", "saber-vivir-123", "<b>Divulgación</b> & más"));
+        var document = XDocument.Parse(NfoBuilder.BuildSeries(new LibrarySeries
+        {
+            Title = "Saber vivir",
+            ProgramId = "saber-vivir-123",
+            Plot = "<b>Divulgación</b> & más"
+        }));
         var root = document.Root!;
 
         Assert.Equal("tvshow", root.Name.LocalName);
@@ -28,9 +33,57 @@ public class NfoBuilderTests
     [Fact]
     public void BuildSeries_UsesADefaultPlot()
     {
-        var root = XDocument.Parse(NfoBuilder.BuildSeries("Saber vivir", "id", "  ")).Root!;
+        var root = XDocument.Parse(NfoBuilder.BuildSeries(new LibrarySeries { Title = "Saber vivir", ProgramId = "id" })).Root!;
 
         Assert.Equal("Programas de Saber vivir en RTVE Play.", root.Element("plot")!.Value);
+    }
+
+    [Fact]
+    public void BuildSeries_WritesGenresTagsCountryAndImdbId()
+    {
+        var root = XDocument.Parse(NfoBuilder.BuildSeries(new LibrarySeries
+        {
+            Title = "Cuéntame cómo pasó",
+            ProgramId = "111570",
+            Plot = "La historia de una familia",
+            Genres = ["Serie", "Cultura", " "],
+            Tags = ["Series Prime Time"],
+            Country = "ES",
+            ImdbId = "tt0375434"
+        })).Root!;
+
+        Assert.Equal(["Serie", "Cultura"], root.Elements("genre").Select(element => element.Value));
+        Assert.Equal(["Series Prime Time", "RTVE Play"], root.Elements("tag").Select(element => element.Value));
+        Assert.Equal("ES", root.Element("country")!.Value);
+
+        var imdb = root.Elements("uniqueid").Single(element => element.Attribute("type")!.Value == "imdb");
+        Assert.Equal("tt0375434", imdb.Value);
+    }
+
+    [Fact]
+    public void BuildSeries_DeduplicatesGenresAndTags()
+    {
+        var root = XDocument.Parse(NfoBuilder.BuildSeries(new LibrarySeries
+        {
+            Title = "x",
+            ProgramId = "y",
+            Genres = ["Documental", "documental", "Cultura"],
+            Tags = ["Serie Documental", "Serie Documental"]
+        })).Root!;
+
+        Assert.Equal(["Documental", "Cultura"], root.Elements("genre").Select(element => element.Value));
+        Assert.Equal(["Serie Documental", "RTVE Play"], root.Elements("tag").Select(element => element.Value));
+    }
+
+    [Fact]
+    public void BuildSeries_OmitsTheOptionalMetadata()
+    {
+        var root = XDocument.Parse(NfoBuilder.BuildSeries(new LibrarySeries { Title = "x", ProgramId = "y" })).Root!;
+
+        Assert.Null(root.Element("country"));
+        Assert.Empty(root.Elements("genre"));
+        Assert.Equal(["RTVE Play"], root.Elements("tag").Select(element => element.Value));
+        Assert.Equal("rtve", Assert.Single(root.Elements("uniqueid")).Attribute("type")!.Value);
     }
 
     [Fact]
@@ -95,6 +148,9 @@ public class NfoBuilderTests
     [Fact]
     public void Documents_StartWithAnXmlDeclaration()
     {
-        Assert.StartsWith("<?xml version=\"1.0\" encoding=\"utf-8\"?>", NfoBuilder.BuildSeries("x", "y", null), StringComparison.Ordinal);
+        Assert.StartsWith(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+            NfoBuilder.BuildSeries(new LibrarySeries { Title = "x", ProgramId = "y" }),
+            StringComparison.Ordinal);
     }
 }

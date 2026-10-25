@@ -26,7 +26,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Schema version of the configuration written by this build.
     /// </summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PluginConfiguration"/> class.
@@ -40,8 +40,10 @@ public class PluginConfiguration : BasePluginConfiguration
         FilterDrm = false;
         PreferMp4 = true;
         WriteNfo = true;
+        WriteImdbIds = true;
         WriteSubtitles = true;
         DeleteObsolete = false;
+        OrganizeSections = true;
         SubtitleLanguages = new List<string>();
         DownloadAllSubtitleLanguages = false;
         SubtitleLanguage = string.Empty;
@@ -89,6 +91,16 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool WriteNfo { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the IMDb id published by RTVE is written to the <c>tvshow.nfo</c>.
+    /// </summary>
+    /// <remarks>
+    /// The genres and tags are always written; this only controls the <c>uniqueid type="imdb"</c>.
+    /// Jellyfin can use that id to fetch extra metadata from IMDb/TMDb, which may replace the title
+    /// or the plot written by this plugin when the library is refreshed.
+    /// </remarks>
+    public bool WriteImdbIds { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether WebVTT subtitles are downloaded and converted to SRT.
     /// </summary>
     public bool WriteSubtitles { get; set; }
@@ -97,6 +109,18 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether .strm files that no longer exist in the catalog are removed.
     /// </summary>
     public bool DeleteObsolete { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether every program is written into a subfolder of the
+    /// destination folder according to its kind (<c>peliculas</c>, <c>series-de-tv</c>,
+    /// <c>documentales</c>...).
+    /// </summary>
+    /// <remarks>
+    /// Enabled by default. Disabling it writes every series directly into the destination folder, as
+    /// plugin versions before 1.0.4.0 did. Jellyfin indexes the subfolders of a «Programas de TV»
+    /// library transparently, so the same library keeps working after the change.
+    /// </remarks>
+    public bool OrganizeSections { get; set; }
 
     /// <summary>
     /// Gets or sets the subtitle languages to download ("es", "en", "ca", "gl", "eu").

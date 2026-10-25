@@ -1,7 +1,7 @@
 ---
 name: "RTVE Play"
 guid: "3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913"
-version: "1.0.2.0"
+version: "1.0.4.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Crea una biblioteca de series con el catálogo a la carta de RTVE Play (.strm + metadatos + subtítulos)."
@@ -17,7 +17,15 @@ owner: "Lowitle"
 artifacts:
   - "Jellyfin.Plugin.RtvePlay.dll"
 changelog: >
-  1.0.2.0: botón «Crear biblioteca» que da de alta la carpeta de destino como biblioteca de
+  1.0.4.0: la carpeta de destino se organiza en subcarpetas por tipo de programa (peliculas,
+  series-de-tv, documentales, magacines, programas-de-tv, noticias, infantil, anime, podcast, archivo y
+  otros) para que la biblioteca se pueda navegar por secciones sin crear una biblioteca por tipo; los
+  programas que ya estaban sueltos en la raíz se mueven solos a su subcarpeta en la primera
+  sincronización, y la opción se puede desactivar. 1.0.3.0: el tvshow.nfo incluye los géneros del tipo de programa (Serie, Documental,
+  Cine…), las categorías temáticas de RTVE, la etiqueta con el tipo exacto y, cuando RTVE lo publica, el id
+  de IMDb, de modo que la biblioteca se puede filtrar por género o etiqueta desde Jellyfin; nueva opción para
+  desactivar el id de IMDb si los proveedores online sobrescriben los datos del plugin. 1.0.2.0: botón
+  «Crear biblioteca» que da de alta la carpeta de destino como biblioteca de
   «Programas de TV» (o añade la carpeta si ya existe), filtro de DRM desactivado por defecto —
   RTVE marca con hasDRM casi todo el catálogo aunque sirve el MP4/HLS sin cifrar, así que se
   dejaban programas enteros sin episodios—, migración automática de la configuración guardada,

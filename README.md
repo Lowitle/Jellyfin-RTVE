@@ -29,9 +29,19 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
   y transcodificación directa en Jellyfin; si no hay, usa la playlist HLS.
 - **Metadatos**: `tvshow.nfo` y `<episodio>.nfo` con título, sinopsis, fecha de emisión, duración,
   géneros y director; `poster.jpg` y `fanart.jpg` desde las imágenes del programa.
+- **Clasificación para filtrar**: los géneros del `tvshow.nfo` incluyen el tipo de programa que publica
+  RTVE (*Serie*, *Documental*, *Infantil*, *Magacín*, *Cine*…) y las etiquetas guardan el tipo exacto
+  (*Serie Documental*, *Series Prime Time*…), así que la biblioteca se puede filtrar por **Género** o por
+  **Etiqueta** desde Jellyfin, sin plugins adicionales. Si RTVE publica el id de IMDb del programa, también
+  se escribe (`uniqueid type="imdb"`).
 - **Subtítulos** (opcionales): descarga los WebVTT de RTVE y los convierte a SRT junto a cada episodio
   (`*.es.srt`, `*.en.srt`…). Por defecto no se descarga ninguno: se marcan con casillas uno o varios
   idiomas, o **todos los idiomas disponibles** para bajar cada pista que publique RTVE.
+- **Secciones en la biblioteca**: cada programa se escribe en la subcarpeta de su tipo (`peliculas`,
+  `series-de-tv`, `documentales`, `magacines`, `programas-de-tv`, `noticias`, `infantil`, `anime`,
+  `podcast`, `archivo`, `otros`) dentro de la carpeta de destino, de modo que una única biblioteca de
+  *Programas de TV* se puede recorrer por secciones. Los programas que ya estaban sueltos en la raíz se
+  mueven solos a su subcarpeta, y la organización se puede desactivar.
 - **Comprobación de la carpeta de destino**: el botón **Comprobar carpeta** dice si Jellyfin puede
   escribir en ella y, si no, propone carpetas escribibles del servidor.
 - **Biblioteca en un clic**: el botón **Crear biblioteca «RTVE Play»** da de alta la carpeta de destino
@@ -121,15 +131,18 @@ git tag v1.0.0.0
 git push origin v1.0.0.0
 ```
 
-El tag lanzó el workflow **Release**: build + 141 pruebas, release `v1.0.0.0` con `rtveplay_1.0.0.0.zip` y
+El tag lanzó el workflow **Release**: build + 181 pruebas, release `v1.0.0.0` con `rtveplay_1.0.0.0.zip` y
 commit automático del `manifest.json` (`checksum` MD5 `926CE03042BAD6AF413E533CBA058404`). La versión
 **1.0.1.0** añade los subtítulos multi-idioma, el listado paginado de programas y la comprobación de la
 carpeta de destino; la **1.0.2.0** añade el botón **Crear biblioteca**, deja el filtro de DRM desactivado
 por defecto (con migración automática de la configuración guardada) y reintenta las descargas ante los
-`429`/`5xx` de RTVE.
+`429`/`5xx` de RTVE. La **1.0.4.0** se publica con todo lo que quedaba pendiente: los géneros del tipo de
+programa, la etiqueta con el tipo exacto y el id de IMDb en el `tvshow.nfo` (previsto para la 1.0.3.0),
+más la organización de la carpeta de destino en subcarpetas por tipo de programa con la migración
+automática de los programas ya sincronizados.
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
-publica el tag (`git tag v1.0.2.0; git push origin v1.0.2.0`). El manifiesto y la release se actualizan solos.
+publica el tag (`git tag v1.0.4.0; git push origin v1.0.4.0`). El manifiesto y la release se actualizan solos.
 
 ## Configuración
 
@@ -158,7 +171,8 @@ seleccionar. Recuerda pulsar **Guardar** al terminar.
 | **Máximo de vídeos por programa** | `0` | Limita cuántos episodios se replican por programa; `0` = sin límite. |
 | **Preferir MP4 progresivo** | activado | Usa MP4 directo cuando existe (permite *seek*); si no, HLS. |
 | **Omitir vídeos protegidos con DRM** | desactivado | Solo si algún vídeo concreto no se reproduce: RTVE marca con `hasDRM` casi todo el catálogo aunque después sirve un MP4/HLS **sin cifrar**, así que activarlo deja programas enteros sin episodios. |
-| **Escribir metadatos .nfo** | activado | Genera `tvshow.nfo` y un `.nfo` por episodio. |
+| **Escribir metadatos .nfo** | activado | Genera `tvshow.nfo` y un `.nfo` por episodio. El `tvshow.nfo` incluye además los géneros (Serie, Documental, Infantil…) y la etiqueta con el tipo exacto de programa. |
+| **Añadir el id de IMDb de los programas** | activado | Escribe `uniqueid type="imdb"` cuando RTVE lo publica (aproximadamente un 20 % del catálogo). Si Jellyfin tiene activos los metadatos de IMDb/TMDb puede usar ese id para completar la ficha y sustituir título o sinopsis; desactívalo para conservar los datos del plugin. |
 | **Borrar episodios que ya no están en el catálogo** | desactivado | Elimina `.strm`/`.nfo`/`.srt` sobrantes; úsalo solo si la carpeta es exclusiva del plugin. |
 
 ### Subtítulos
@@ -170,6 +184,29 @@ seleccionar. Recuerda pulsar **Guardar** al terminar.
 | **Español / Inglés / Catalán / Gallego / Euskera** | ninguno | Se pueden marcar **varios**: se escribe un `.srt` por idioma (`*.es.srt`, `*.en.srt`…). Las casillas se deshabilitan si no se descargan subtítulos o si está activo «todos los idiomas». |
 
 El botón **Ejecutar ahora** lanza la tarea sin esperar al siguiente ciclo.
+
+### Filtros por tipo de programa
+
+El `tvshow.nfo` de cada programa lleva dos datos que Jellyfin usa para filtrar dentro de la biblioteca:
+
+- **Géneros** (`<genre>`): el tipo normalizado de RTVE (*Serie*, *Documental*, *Infantil*, *Magacín*,
+  *Concurso*, *Informativo*, *Cine*, *Música*, *Cocina*, *Podcast*…) seguido de las categorías temáticas
+  de RTVE (*Cultura*, *Humor*, *Información y actualidad*…).
+- **Etiquetas** (`<tag>`): el tipo exacto que publica RTVE (*Serie Documental*, *Series Prime Time*,
+  *Contenedor Películas*…) y la etiqueta fija *RTVE Play*.
+
+En la vista de la biblioteca, el botón de filtro de Jellyfin permite elegir **Géneros** y **Etiquetas**: «solo
+series» es marcar el género *Serie* y «solo documentales» el género *Documental*. No hacen falta bibliotecas
+separadas.
+
+El mapeo usa el `programTypeId` de RTVE (estable aunque cambie el texto); si aparece un tipo nuevo, se deduce
+del nombre (cualquier tipo que contenga «documental», «serie», «infantil», «concurso», «magacín», «cine»,
+«podcast», «concierto», «receta», «entrevista» o «especial»). Un tipo desconocido no añade género, pero sí la
+etiqueta con el texto de RTVE, para que se vea en la ficha.
+
+> El id de IMDb solo está disponible en una parte del catálogo. El plugin no consulta TMDb ni TVDB: si quieres
+> que Jellyfin complete las fichas con esos proveedores, deja activada la opción **Añadir el id de IMDb de los
+> programas** y activa los proveedores de metadatos en la biblioteca.
 
 ### Carpeta de destino: biblioteca separada
 
@@ -230,15 +267,39 @@ carpeta; el mensaje de la tarea indica ahora la ruta comprobada y las carpetas a
 
 ```
 <Carpeta de destino>/
-└── Saber Vivir/
-    ├── tvshow.nfo
-    ├── poster.jpg
-    ├── fanart.jpg
-    └── Season 1/
-        ├── Saber Vivir - S01E01 - Título del episodio.strm
-        ├── Saber Vivir - S01E01 - Título del episodio.nfo
-        └── Saber Vivir - S01E01 - Título del episodio.es.srt   (uno por idioma marcado)
+├── magacines/
+│   └── Saber Vivir/
+│       ├── tvshow.nfo
+│       ├── poster.jpg
+│       ├── fanart.jpg
+│       └── Season 1/
+│           ├── Saber Vivir - S01E01 - Título del episodio.strm
+│           ├── Saber Vivir - S01E01 - Título del episodio.nfo
+│           └── Saber Vivir - S01E01 - Título del episodio.es.srt   (uno por idioma marcado)
+├── documentales/
+├── series-de-tv/
+├── peliculas/
+├── programas-de-tv/
+├── noticias/
+├── infantil/
+├── anime/
+├── podcast/
+├── archivo/
+└── otros/
 ```
+
+Cada programa va a la subcarpeta de su tipo (`peliculas`, `series-de-tv`, `documentales`, `magacines`,
+`programas-de-tv`, `noticias`, `infantil`, `anime`, `podcast`, `archivo` u `otros`), así que la misma
+biblioteca de *Programas de TV* se puede recorrer por secciones sin crear una biblioteca por tipo. La
+opción **Organizar cada programa en una subcarpeta según su tipo** (activada por defecto) controla este
+comportamiento: al desactivarla, las series se escriben directamente en la carpeta de destino, como en
+las versiones anteriores. Si la carpeta de destino ya apunta a una de las secciones
+(`/media/rtve-play/documentales`), no se añade otra vez.
+
+Al actualizar desde una versión anterior, la primera sincronización mueve cada carpeta de programa que
+estuviera suelta en la raíz a su sección (`Directory.Move`): es rápido y conserva los archivos, pero
+Jellyfin ve el programa como una serie nueva, así que se puede perder el estado de visto y los cambios
+manuales de los episodios. El log indica cada movimiento.
 
 Los nombres se sanean (caracteres prohibidos, longitud máxima) y se desambiguan con `[2]`, `[3]`… cuando
 dos episodios comparten título. Los archivos solo se reescriben si el contenido cambia.
@@ -278,7 +339,7 @@ dos episodios comparten título. Los archivos solo se reescriben si el contenido
 
 ```powershell
 dotnet build                     # compila plugin y tests (Jellyfin.Plugin.RtvePlay.sln)
-dotnet test                      # 121 pruebas (xunit)
+dotnet test                      # 223 pruebas (xunit)
 pwsh ./package.ps1               # genera dist/rtveplay_1.0.0.0.zip + SHA256
 # Windows PowerShell 5.1: powershell -ExecutionPolicy Bypass -File .\package.ps1
 ```

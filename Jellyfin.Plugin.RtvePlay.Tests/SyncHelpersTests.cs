@@ -57,6 +57,29 @@ public class SyncHelpersTests
         Assert.Equal(["gl"], RtveSyncService.NormalizeLanguages(["gl"], "ca"));
     }
 
+    [Theory]
+    [InlineData("tt0375434", "tt0375434")]
+    [InlineData(" TT0375434 ", "tt0375434")]
+    [InlineData("tt8739752", "tt8739752")]
+    public void NormalizeImdbId_KeepsWellFormedIds(string? value, string expected)
+    {
+        Assert.Equal(expected, RtveSyncService.NormalizeImdbId(value));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("0")]
+    [InlineData("tt")]
+    [InlineData("0375434")]
+    [InlineData("tt-375434")]
+    [InlineData("tt0375434 | tt0375435")]
+    public void NormalizeImdbId_DropsAnythingElse(string? value)
+    {
+        Assert.Null(RtveSyncService.NormalizeImdbId(value));
+    }
+
     [Fact]
     public void SelectSubtitleTracks_MatchesEveryRequestedLanguage()
     {

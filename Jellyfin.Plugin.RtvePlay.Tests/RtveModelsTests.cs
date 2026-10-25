@@ -114,6 +114,48 @@ public class RtveModelsTests
         Assert.EndsWith("01759842813768.jpg", program.BackgroundImage, StringComparison.Ordinal);
     }
 
+    // Trimmed copy of https://www.rtve.es/api/programas/111570.json.
+    [Fact]
+    public void ProgramPage_WithClassificationFields_Deserializes()
+    {
+        const string json = """
+            {
+              "page": {
+                "items": [
+                  {
+                    "id": "111570",
+                    "name": "Saber vivir",
+                    "programType": "Magacín semanal",
+                    "programTypeId": 136612,
+                    "idImdb": "tt0375434",
+                    "idWiki": "https://es.wikipedia.org/wiki/Saber_vivir",
+                    "country": "ES",
+                    "ageRange": "Recomendable para todos los públicos",
+                    "generos": [
+                      { "generoInf": "Cultura", "generoInfUid": "GE_CULTU" },
+                      { "generoInf": "Humor", "generoInfUid": "GE_HUMOR" }
+                    ]
+                  }
+                ],
+                "total": 1,
+                "totalPages": 1,
+                "number": 1,
+                "size": 100
+              }
+            }
+            """;
+
+        var program = Assert.Single(JsonSerializer.Deserialize<RtveEnvelope<RtveProgram>>(json, WebOptions)!.Page!.Items!);
+
+        Assert.Equal("Magacín semanal", program.ProgramType);
+        Assert.Equal("136612", program.ProgramTypeId);
+        Assert.Equal("tt0375434", program.ImdbId);
+        Assert.Equal("https://es.wikipedia.org/wiki/Saber_vivir", program.WikiUrl);
+        Assert.Equal("ES", program.Country);
+        Assert.Equal("Recomendable para todos los públicos", program.AgeRating);
+        Assert.Equal(["Cultura", "Humor"], program.Genres!.Select(genre => genre.Name));
+    }
+
     [Theory]
     [InlineData("{\"value\": 8124123}", "8124123")]
     [InlineData("{\"value\": \"8124123\"}", "8124123")]

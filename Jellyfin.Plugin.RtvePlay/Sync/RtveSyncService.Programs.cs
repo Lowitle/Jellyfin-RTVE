@@ -117,11 +117,15 @@ public sealed partial class RtveSyncService
                 seriesTitle);
         }
 
+        // The folder is moved only once the episodes are known to be writable: moving it and then
+        // failing to write would leave Jellyfin without the program.
+        var section = ResolveSection(program, seriesTitle);
+        var root = ProgramSections.RootFor(configuration.DestinationPath, configuration.OrganizeSections, section);
+        var migratedFrom = MigrateLegacySeriesFolder(configuration, root, seriesTitle);
+
         var result = StrmLibrary.Write(
-            configuration.DestinationPath,
-            seriesTitle,
-            programId,
-            seriesPlot,
+            root,
+            BuildSeriesMetadata(configuration, program, programId, seriesTitle, seriesPlot),
             episodes,
             new LibraryWriteOptions
             {
@@ -136,10 +140,17 @@ public sealed partial class RtveSyncService
         }
 
         _libraryMonitor.ReportFileSystemChanged(result.SeriesPath);
+        if (migratedFrom is not null)
+        {
+            // The old folder is gone: telling the monitor makes Jellyfin drop the stale item instead of
+            // keeping a broken series next to the new one.
+            _libraryMonitor.ReportFileSystemChanged(migratedFrom);
+        }
 
         _logger.LogInformation(
-            "RTVE Play: {Series} → {Episodes} episodios ({Skipped} descartados), {Files} archivos escritos, {Removed} obsoletos eliminados",
+            "RTVE Play: {Series} ({Section}) → {Episodes} episodios ({Skipped} descartados), {Files} archivos escritos, {Removed} obsoletos eliminados",
             seriesTitle,
+            ProgramSections.FolderName(section),
             result.EpisodesWritten,
             skipped,
             result.FilesWritten,

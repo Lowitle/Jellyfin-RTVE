@@ -112,4 +112,48 @@ public sealed class RtveProgram
     [JsonPropertyName("numSeasons")]
     [JsonConverter(typeof(FlexibleInt32Converter))]
     public int? SeasonCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the program type as published by RTVE ("Magacín semanal", "Serie Documental"...).
+    /// </summary>
+    [JsonPropertyName("programType")]
+    public string? ProgramType { get; set; }
+
+    /// <summary>
+    /// Gets or sets the numeric id of <see cref="ProgramType"/>. RTVE keeps it stable when the
+    /// label changes, so it is the preferred key to classify the program.
+    /// </summary>
+    [JsonPropertyName("programTypeId")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
+    public string? ProgramTypeId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the IMDb id ("tt0375434"), when RTVE publishes one.
+    /// </summary>
+    [JsonPropertyName("idImdb")]
+    public string? ImdbId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Wikipedia page of the program, when RTVE publishes one.
+    /// </summary>
+    [JsonPropertyName("idWiki")]
+    public string? WikiUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the production country ("ES").
+    /// </summary>
+    [JsonPropertyName("country")]
+    public string? Country { get; set; }
+
+    /// <summary>
+    /// Gets or sets the age rating ("No recomendable para menores de 7 años"), when RTVE publishes one.
+    /// </summary>
+    [JsonPropertyName("ageRange")]
+    public string? AgeRating { get; set; }
+
+    /// <summary>
+    /// Gets or sets the RTVE categories of the program ("Cultura", "Humor", "Información y actualidad"...).
+    /// </summary>
+    [JsonPropertyName("generos")]
+    public List<RtveGenre>? Genres { get; set; }
 }

@@ -62,10 +62,13 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <summary>
-    /// Brings the stored settings forward to the current schema. Version 2 turns the DRM filter off:
-    /// RTVE flags many videos as DRM protected but still serves the MP4/HLS unencrypted, so the old
-    /// default silently dropped entire programs from the library.
+    /// Brings the stored settings forward to the current schema.
     /// </summary>
+    /// <remarks>
+    /// Version 2 turns the DRM filter off: RTVE flags many videos as DRM protected but still serves
+    /// the MP4/HLS unencrypted, so the old default silently dropped entire programs from the library.
+    /// Version 3 enables the subfolder organization, which is the option this build ships with.
+    /// </remarks>
     /// <param name="configuration">Stored configuration.</param>
     private void MigrateConfiguration(PluginConfiguration configuration)
     {
@@ -74,7 +77,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             return;
         }
 
-        configuration.FilterDrm = false;
+        if (configuration.ConfigurationVersion < 2)
+        {
+            configuration.FilterDrm = false;
+        }
+
+        configuration.OrganizeSections = true;
         configuration.ConfigurationVersion = PluginConfiguration.CurrentVersion;
         UpdateConfiguration(configuration);
     }
