@@ -8,6 +8,15 @@ las URLs de streaming de RTVE, junto con los metadatos `.nfo`, las carátulas y 
 > reproducido sigue alojado en los servidores de RTVE y sujeto a sus condiciones de uso. Úsalo únicamente
 > con contenido al que tengas derecho de acceso.
 
+## Instalación rápida
+
+Añade este repositorio en **Panel de control → Plugins → Repositorios → +** y instala **RTVE Play** desde el
+catálogo (a partir de ahí se actualiza sola con cada versión publicada):
+
+```
+https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
+```
+
 ## Características
 
 - **Programas configurables**: se indica el id numérico (`111570`), el slug de la página (`saber-vivir`)
@@ -39,18 +48,16 @@ las URLs de streaming de RTVE, junto con los metadatos `.nfo`, las carátulas y 
 El repositorio incluye un `manifest.json` que Jellyfin puede leer como repositorio de plugins, de forma que
 el plugin se instala y **se actualiza** desde el catálogo, sin copiar archivos a mano.
 
-1. Sube el proyecto a GitHub (ver *Publicación*).
-2. Publica una versión: `git tag v1.0.0.0` y `git push origin v1.0.0.0`. El workflow **Release** compila,
-   ejecuta las pruebas, crea la release con el `.zip` y actualiza `manifest.json` (usuario, `sourceUrl`,
-   `checksum` MD5 y fecha).
-3. En Jellyfin: **Panel de control → Plugins → Repositorios → +** y añade
-   `https://raw.githubusercontent.com/<usuario>/<repo>/main/manifest.json`
-   (sustituye `<usuario>` y `<repo>`; si tu rama por defecto es `master`, usa `master`).
-4. Guarda, refresca el catálogo e instala **RTVE Play** (categoría *General*).
-5. Reinicia Jellyfin cuando lo pida.
+1. El proyecto ya está publicado en <https://github.com/Lowitle/Jellyfin-RTVE> y la release **v1.0.0.0** está
+   disponible (ver *Publicación* para entender el flujo).
+2. En Jellyfin: **Panel de control → Plugins → Repositorios → +** y añade
+   `https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json`
+   (si tu rama por defecto fuera `master`, usa `master`).
+3. Guarda, refresca el catálogo e instala **RTVE Play** (categoría *General*).
+4. Reinicia Jellyfin cuando lo pida.
 
-> El `manifest.json` versionado deja `owner` como `OWNER` y `versions` vacío a propósito: es el workflow de
-> release quien los rellena con los datos reales del repositorio.
+> El `manifest.json` versionado lo mantiene el workflow de release: `owner` es `Lowitle` y `versions[]` se
+> rellena con cada tag publicado (`sourceUrl`, `checksum` MD5 y `timestamp`).
 
 ### Opción B: paquete compilado
 
@@ -76,8 +83,8 @@ en una carpeta llamada `RTVE Play_1.0.0.0` y reinicia Jellyfin.
 
 - `build.yaml` es el manifiesto para el [repositorio oficial de plugins de Jellyfin](https://github.com/jellyfin/jellyfin-plugin-repository)
   (`guid`, `version`, `targetAbi`, `framework`, `artifacts`). Debe mantenerse sincronizado con
-  `Directory.Build.props` (`Version`) y con `Plugin.PluginId`. Si algún día se envía allí, hay que rellenar
-  `owner` con el usuario u organización de GitHub.
+  `Directory.Build.props` (`Version`) y con `Plugin.PluginId`. `owner` ya es `Lowitle`; solo hay que
+  cambiarlo si algún día se envía al repositorio oficial.
 - `manifest.json` (raíz) es el **repositorio de plugins propio**: un array JSON con `guid`, `name`,
   `description`, `overview`, `owner`, `category` y `versions[]` (`version`, `changelog`, `targetAbi`,
   `sourceUrl`, `checksum` MD5 del `.zip`, `timestamp`).
@@ -89,18 +96,21 @@ en una carpeta llamada `RTVE Play_1.0.0.0` y reinicia Jellyfin.
   3. `scripts/Update-Manifest.ps1` calcula el MD5, añade la versión al `manifest.json` y lo commitea;
   4. crea la release con el `.zip` adjunto.
 
-Primera publicación:
+Publicación inicial (ya realizada el 25/10/2026):
 
 ```powershell
 git init
 git add .
 git commit -m "RTVE Play 1.0.0.0"
 git branch -M main
-git remote add origin https://github.com/<usuario>/<repo>.git
+git remote add origin https://github.com/Lowitle/Jellyfin-RTVE.git
 git push -u origin main
 git tag v1.0.0.0
 git push origin v1.0.0.0
 ```
+
+El tag lanzó el workflow **Release**: build + 104 pruebas, release `v1.0.0.0` con `rtveplay_1.0.0.0.zip` y
+commit automático del `manifest.json` (`checksum` MD5 `926CE03042BAD6AF413E533CBA058404`).
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
 publica el tag (`git tag v1.0.1.0; git push origin v1.0.1.0`). El manifiesto y la release se actualizan solos.
