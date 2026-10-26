@@ -8,6 +8,14 @@
   "category": "General",
   "versions": [
     {
+      "version": "1.1.1.0",
+      "changelog": "RTVE Play 1.1.1.0",
+      "targetAbi": "10.11.0.0",
+      "sourceUrl": "https://github.com/Lowitle/Jellyfin-RTVE/releases/download/v1.1.1.0/rtveplay_1.1.1.0.zip",
+      "checksum": "679DF230452482BC6A4DAD60A0047A0C",
+      "timestamp": "2026-10-26T12:14:17Z"
+    },
+    {
       "version": "1.1.0.0",
       "changelog": "Una subcarpeta de tipo que ya esta en otra biblioteca de Jellyfin deja de bloquear el boton Crear biblioteca (Jellyfin puede indexar la misma carpeta en varias bibliotecas) y la biblioteca RTVE Play se crea igualmente con todas las subcarpetas. Nueva tabla Carpetas y bibliotecas: lista cada subcarpeta con las bibliotecas que la contienen y un desplegable para anadirla a otra biblioteca, por ejemplo programas-de-tv a Programes de Televisio, sin quitarla de RTVE Play.",
       "targetAbi": "10.11.0.0",
