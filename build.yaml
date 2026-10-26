@@ -1,7 +1,7 @@
 ---
 name: "RTVE Play"
 guid: "3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913"
-version: "1.0.8.0"
+version: "1.1.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Crea una biblioteca de series con el catálogo a la carta de RTVE Play (.strm + metadatos + subtítulos)."
@@ -17,7 +17,11 @@ owner: "Lowitle"
 artifacts:
   - "Jellyfin.Plugin.RtvePlay.dll"
 changelog: >
-  1.0.8.0: el botón «Crear biblioteca» asocia a la biblioteca cada subcarpeta de tipo (peliculas,
+  1.1.0.0: una subcarpeta de tipo que ya está en otra biblioteca de Jellyfin deja de bloquear el botón
+  «Crear biblioteca» —Jellyfin puede indexar la misma carpeta en varias bibliotecas— y la biblioteca «RTVE
+  Play» se crea igualmente con todas las subcarpetas. Nueva tabla «Carpetas y bibliotecas»: lista cada
+  subcarpeta con las bibliotecas que la contienen y un desplegable para añadirla a otra biblioteca (por
+  ejemplo programas-de-tv a «Programes de Televisió») sin quitarla de «RTVE Play». 1.0.8.0: el botón «Crear biblioteca» asocia a la biblioteca cada subcarpeta de tipo (peliculas,
   series-de-tv, documentales…), no la carpeta raíz, y migra las bibliotecas que ya apuntaban a la raíz
   sustituyéndola por las subcarpetas para que Jellyfin no indexe dos veces los mismos programas. 1.0.7.0: los recuentos del filtro «Tipo» siguen al filtro «Solo con vídeos», así que el número que
   muestra cada carpeta coincide con las filas que aparecen al elegirla. 1.0.6.0: el catálogo de programas ya no descarta los programas de radio al paginar, así que cada

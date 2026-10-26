@@ -149,6 +149,38 @@
                 text-align: center;
                 opacity: 0.75;
             }
+
+            /* «Carpetas y bibliotecas»: one row per section and a combo with the libraries of the
+               server. It stays hidden until the user opens it, so the page keeps its length. */
+            #RtvePlayConfigPage .rtveLibraryPanel {
+                display: none;
+                margin: 0.6em 0 1em;
+                padding: 0.8em 1em;
+                border: 1px solid rgba(128, 128, 128, 0.35);
+                border-radius: 0.3em;
+            }
+
+            #RtvePlayConfigPage .rtveLibraryPanel.rtveVisible {
+                display: block;
+            }
+
+            #RtvePlayConfigPage .rtveLibraryPanel .sectionTitle {
+                margin: 0 0 0.3em;
+            }
+
+            #RtvePlayConfigPage .rtveWarning {
+                color: #e5a00d;
+            }
+
+            #RtvePlayConfigPage .rtveLink {
+                color: #00a4dc;
+                cursor: pointer;
+                text-decoration: underline;
+            }
+
+            #RtvePlayConfigPage .rtveLibrarySelect {
+                min-width: 12em;
+            }
         </style>
 
         <div data-role="content">
@@ -201,6 +233,17 @@
                                 <span>Crear biblioteca «RTVE Play» y asociar las carpetas</span>
                             </button>
                             <div id="RtvePathStatus" class="fieldDescription"></div>
+                            <button id="RtveLibraryFolders" is="emby-button" type="button" class="raised block">
+                                <span>Carpetas y bibliotecas…</span>
+                            </button>
+                            <div class="fieldDescription">
+                                Jellyfin puede indexar la misma carpeta en varias bibliotecas, así que no pasa
+                                nada si una subcarpeta ya está en otra biblioteca: «RTVE Play» las tendrá todas
+                                igualmente. Con «Carpetas y bibliotecas…» puedes añadir una subcarpeta a otra
+                                biblioteca (por ejemplo, <code>programas-de-tv</code> a «Programes de Televisió»)
+                                sin quitarla de «RTVE Play».
+                            </div>
+                            <div id="RtveLibraryFoldersPanel" class="rtveLibraryPanel"></div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -383,6 +426,9 @@
                 pluginId: '3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913',
                 taskKey: 'RtvePlayRefresh',
                 programs: [],
+                // Last answer of the «Carpetas y bibliotecas» table, shown next to it because the status
+                // line of the page is at the bottom.
+                libraryMessage: '',
                 catalog: {
                     items: [],
                     page: 1,
@@ -1438,6 +1484,7 @@
 
                     if (!success) {
                         target.textContent = message || 'No se pudo crear la biblioteca.';
+                        rtveLibraryFoldersLink(target);
                         return;
                     }
 
@@ -1445,12 +1492,242 @@
                         + (folders.length > 1
                             ? ' Carpetas: ' + folders.length + '.'
                             : ' Ruta: «' + checkedPath + '».');
+                    rtveLibraryFoldersLink(target);
                     rtveStatus('Biblioteca «' + (libraryName || 'RTVE Play')
                         + '» lista. Analiza la biblioteca desde Panel → Bibliotecas para que aparezcan los programas.');
                 }, function () {
                     Dashboard.hideLoadingMsg();
                     target.textContent = 'No se pudo crear la biblioteca. Revisa los permisos de la carpeta.';
                 });
+            }
+
+            // The sections are not exclusive: Jellyfin indexes a folder in every library that points at
+            // it, so one section can be added to a library of the user and still be part of «RTVE Play».
+            function rtveToggleLibraryFolders() {
+                var panel = document.querySelector('#RtveLibraryFoldersPanel');
+                if (!panel) {
+                    return;
+                }
+
+                if (panel.className.indexOf('rtveVisible') !== -1) {
+                    panel.className = 'rtveLibraryPanel';
+                    return;
+                }
+
+                panel.className = 'rtveLibraryPanel rtveVisible';
+                rtveLoadLibraryFolders();
+            }
+
+            function rtveReloadLibraryFolders() {
+                var panel = document.querySelector('#RtveLibraryFoldersPanel');
+                if (panel && panel.className.indexOf('rtveVisible') !== -1) {
+                    rtveLoadLibraryFolders();
+                }
+            }
+
+            function rtveLoadLibraryFolders() {
+                var panel = document.querySelector('#RtveLibraryFoldersPanel');
+                var path = document.querySelector('#RtveDestinationPath').value.trim();
+                var sections = document.querySelector('#RtveOrganizeSections').checked;
+
+                if (!path) {
+                    panel.textContent = 'Escribe la carpeta de destino para ver las subcarpetas y las bibliotecas.';
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                ApiClient.getJSON(rtveUrl('Library/Folders', {
+                    path: path,
+                    sections: sections ? 'true' : 'false'
+                })).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    rtveRenderLibraryFolders(result);
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    panel.textContent = 'No se pudieron leer las carpetas ni las bibliotecas del servidor.';
+                });
+            }
+
+            function rtveRenderLibraryFolders(result) {
+                var panel = document.querySelector('#RtveLibraryFoldersPanel');
+                var folders = rtveField(result, 'folders') || [];
+                var libraries = rtveField(result, 'libraries') || [];
+                var libraryName = rtveField(result, 'libraryName') || 'RTVE Play';
+                var missing = rtveField(result, 'missing') || [];
+                var target = rtveField(result, 'path') || '';
+                var organized = rtveField(result, 'organizeSections') !== false;
+
+                panel.innerHTML = '';
+
+                panel.appendChild(rtveElement('h3', 'sectionTitle', 'Carpetas y bibliotecas'));
+                panel.appendChild(rtveElement(
+                    'div',
+                    'fieldDescription',
+                    'Jellyfin puede indexar la misma carpeta en varias bibliotecas: añadir una carpeta a otra '
+                        + 'biblioteca no la quita de «' + libraryName + '». Para quitarla, usa Panel → Bibliotecas.'));
+
+                if (missing.length > 0 && organized) {
+                    panel.appendChild(rtveElement(
+                        'div',
+                        'fieldDescription rtveWarning',
+                        'A la biblioteca «' + libraryName + '» le faltan ' + missing.length + ' carpetas ('
+                            + missing.join(', ') + '). Pulsa «Crear biblioteca «RTVE Play» y asociar las carpetas» '
+                            + 'para añadirlas todas.'));
+                } else if (!organized) {
+                    panel.appendChild(rtveElement(
+                        'div',
+                        'fieldDescription',
+                        'Con «Organizar cada programa en una subcarpeta según su tipo» desactivado, la biblioteca '
+                            + 'indexa la carpeta de destino entera; las subcarpetas de abajo son las que se usan '
+                            + 'al activarlo.'));
+                } else {
+                    panel.appendChild(rtveElement(
+                        'div',
+                        'fieldDescription',
+                        'La biblioteca «' + libraryName + '» ya tiene las ' + folders.length + ' subcarpetas.'));
+                }
+
+                if (RtvePlayConfig.libraryMessage) {
+                    panel.appendChild(rtveElement('div', 'fieldDescription', RtvePlayConfig.libraryMessage));
+                }
+
+                var wrap = rtveElement('div', 'rtveTableWrap');
+                var table = rtveElement('table', 'rtveTable');
+                var head = rtveElement('thead');
+                var headRow = rtveElement('tr');
+                [
+                    'Carpeta',
+                    'En «' + libraryName + '»',
+                    'Bibliotecas que la contienen',
+                    'Añadir a una biblioteca…'
+                ].forEach(function (title) {
+                    headRow.appendChild(rtveElement('th', '', title));
+                });
+                head.appendChild(headRow);
+                table.appendChild(head);
+
+                var body = rtveElement('tbody');
+                folders.forEach(function (folder) {
+                    body.appendChild(rtveLibraryFolderRow(folder, libraries));
+                });
+                table.appendChild(body);
+                wrap.appendChild(table);
+                panel.appendChild(wrap);
+
+                panel.appendChild(rtveElement(
+                    'div',
+                    'fieldDescription',
+                    'Carpeta de destino: «' + target + '». Los cambios se aplican al momento; Jellyfin revisa '
+                        + 'la carpeta añadida en el siguiente análisis.'));
+            }
+
+            function rtveLibraryFolderRow(folder, libraries) {
+                var row = rtveElement('tr');
+                var path = rtveField(folder, 'path') || '';
+                var section = rtveField(folder, 'section') || '';
+                var exists = rtveField(folder, 'exists') === true;
+                var covered = rtveField(folder, 'covered') === true;
+                var owners = rtveField(folder, 'libraries') || [];
+
+                var nameCell = rtveElement('td', '', section);
+                nameCell.appendChild(rtveElement('div', 'rtveMuted', path + (exists ? '' : ' · todavía no existe')));
+                row.appendChild(nameCell);
+
+                row.appendChild(rtveElement('td', covered ? '' : 'rtveWarning', covered ? 'Sí' : 'No'));
+                row.appendChild(rtveElement(
+                    'td',
+                    owners.length > 0 ? '' : 'rtveMuted',
+                    owners.length > 0 ? owners.join(' · ') : '—'));
+
+                var cell = rtveElement('td');
+                var select = rtveElement('select', 'rtveSelect rtveLibrarySelect');
+                var placeholder = rtveElement(
+                    'option',
+                    '',
+                    libraries.length > 0 ? 'Elegir biblioteca…' : 'No hay más bibliotecas');
+                placeholder.value = '';
+                select.appendChild(placeholder);
+
+                libraries.forEach(function (library) {
+                    var libraryName = rtveField(library, 'name');
+                    if (!libraryName) {
+                        return;
+                    }
+                    var option = rtveElement(
+                        'option',
+                        '',
+                        libraryName + ' (' + (rtveField(library, 'type') || 'sin tipo') + ')');
+                    option.value = libraryName;
+                    select.appendChild(option);
+                });
+
+                select.disabled = libraries.length === 0;
+                select.addEventListener('change', function () {
+                    if (this.value) {
+                        rtveAssociateLibraryFolder(path, this.value, this);
+                    }
+                });
+                cell.appendChild(select);
+                row.appendChild(cell);
+
+                return row;
+            }
+
+            function rtveAssociateLibraryFolder(folder, library, select) {
+                Dashboard.showLoadingMsg();
+                ApiClient.ajax({
+                    type: 'POST',
+                    url: rtveUrl('Library/Associate', { folder: folder, library: library }),
+                    dataType: 'json'
+                }).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+
+                    var success = rtveField(result, 'success') === true;
+                    var message = rtveField(result, 'message') || '';
+
+                    RtvePlayConfig.libraryMessage = message
+                        || (success ? 'Carpeta asociada.' : 'No se pudo asociar la carpeta.');
+                    rtveStatus(RtvePlayConfig.libraryMessage);
+                    if (select) {
+                        select.value = '';
+                    }
+
+                    // The owners of the folder and the missing sections change with the association.
+                    rtveLoadLibraryFolders();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    RtvePlayConfig.libraryMessage = 'No se pudo asociar la carpeta a la biblioteca.';
+                    rtveStatus(RtvePlayConfig.libraryMessage);
+                    if (select) {
+                        select.value = '';
+                    }
+                    rtveLoadLibraryFolders();
+                });
+            }
+
+            // The result of the library button opens the same table: a folder that belongs to another
+            // library can be associated with it without leaving the page.
+            function rtveLibraryFoldersLink(target) {
+                if (!target) {
+                    return;
+                }
+
+                target.appendChild(document.createTextNode(' '));
+
+                var link = rtveElement('a', 'rtveLink', 'Ver carpetas y bibliotecas');
+                link.href = '#';
+                link.addEventListener('click', function (event) {
+                    event.preventDefault();
+
+                    var panel = document.querySelector('#RtveLibraryFoldersPanel');
+                    if (panel && panel.className.indexOf('rtveVisible') === -1) {
+                        rtveToggleLibraryFolders();
+                    }
+                    if (panel && typeof panel.scrollIntoView === 'function') {
+                        panel.scrollIntoView();
+                    }
+                });
+                target.appendChild(link);
             }
 
             function rtveRunNow() {
@@ -1481,6 +1758,8 @@
                 document.querySelector('#RtveSearchPrograms').addEventListener('click', rtveSearch);
                 document.querySelector('#RtveListPrograms').addEventListener('click', rtveListPrograms);
                 document.querySelector('#RtveCheckPath').addEventListener('click', rtveCheckPath);
+                document.querySelector('#RtveLibraryFolders').addEventListener('click', rtveToggleLibraryFolders);
+                document.querySelector('#RtveOrganizeSections').addEventListener('change', rtveReloadLibraryFolders);
                 document.querySelector('#RtveCreateLibrary').addEventListener('click', rtveCreateLibrary);
                 document.querySelector('#RtveRunNow').addEventListener('click', rtveRunNow);
 

@@ -189,6 +189,73 @@ public sealed class RtvePlayController : ControllerBase
     }
 
     /// <summary>
+    /// Lists the section folders of the destination and the libraries that index them.
+    /// </summary>
+    /// <remarks>
+    /// The page uses it for the «Carpetas y bibliotecas» table: Jellyfin can index the same folder in
+    /// several libraries, so a section can be added to a library of the user and still be part of
+    /// «RTVE Play».
+    /// </remarks>
+    /// <param name="path">Destination folder; the configured one when omitted.</param>
+    /// <param name="name">Library name; «RTVE Play» when omitted.</param>
+    /// <param name="sections">Whether the sync writes each program into the subfolder of its kind.</param>
+    /// <returns>The section folders and the libraries of the server.</returns>
+    [HttpGet("Library/Folders")]
+    public ActionResult<LibrarySectionMatrix> GetLibraryFolders(
+        [FromQuery] string? path,
+        [FromQuery] string? name,
+        [FromQuery] bool? sections)
+    {
+        var configuration = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        var target = string.IsNullOrWhiteSpace(path) ? configuration.DestinationPath : path;
+
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return BadRequest("Escribe la carpeta de destino antes de ver las carpetas.");
+        }
+
+        return Ok(LibraryProvisioner.Describe(
+            target,
+            name,
+            sections ?? configuration.OrganizeSections,
+            LibraryProvisioner.ToFolders(_libraryManager.GetVirtualFolders() ?? [])));
+    }
+
+    /// <summary>
+    /// Adds a folder of the destination to a library of the server.
+    /// </summary>
+    /// <remarks>
+    /// The folder is not removed from «RTVE Play»: Jellyfin indexes it in both libraries. The status is
+    /// always returned with HTTP 200 and a <c>success</c> flag, so the page can show the reason of a
+    /// rejection instead of a generic error.
+    /// </remarks>
+    /// <param name="folder">Folder to associate.</param>
+    /// <param name="library">Library that has to index the folder.</param>
+    /// <returns>The result of the operation.</returns>
+    [HttpPost("Library/Associate")]
+    public ActionResult<LibraryAssociateStatus> AssociateFolder(
+        [FromQuery] string? folder,
+        [FromQuery] string? library)
+    {
+        var status = LibraryProvisioner.Associate(_libraryManager, folder, library, _logger, _libraryMonitor);
+
+        if (status.Success)
+        {
+            _logger.LogInformation(
+                "RTVE Play: carpeta {Folder} → biblioteca {Library} ({Outcome})",
+                status.Folder,
+                status.LibraryName,
+                status.Outcome);
+        }
+        else
+        {
+            _logger.LogWarning("RTVE Play: no se pudo asociar la carpeta: {Message}", status.Message);
+        }
+
+        return Ok(status);
+    }
+
+    /// <summary>
     /// Applies the configured refresh interval to the scheduled task.
     /// </summary>
     /// <returns>No content.</returns>

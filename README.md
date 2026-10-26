@@ -55,7 +55,11 @@ https://raw.githubusercontent.com/Lowitle/Jellyfin-RTVE/main/manifest.json
 - **Biblioteca en un clic**: el botón **Crear biblioteca «RTVE Play»** da de alta una biblioteca de tipo
   *Programas de TV* con las subcarpetas de tipo como carpetas (o las añade a la biblioteca «RTVE Play» si
   ya existía, quitando de ella la carpeta raíz para no indexar dos veces los mismos programas), sin pasar
-  por el asistente de Jellyfin.
+  por el asistente de Jellyfin. Una subcarpeta que ya esté en otra biblioteca no lo impide: Jellyfin indexa
+  la misma carpeta en todas las bibliotecas que la contienen.
+- **Tabla «Carpetas y bibliotecas»**: lista las subcarpetas de tipo con las bibliotecas que las contienen y
+  un desplegable para añadir una subcarpeta a otra biblioteca del servidor (por ejemplo `programas-de-tv` a
+  «Programes de Televisió») sin quitarla de «RTVE Play».
 - **Filtro de DRM opcional**: desactivado por defecto, porque RTVE marca con `hasDRM` buena parte del
   catálogo aunque después sirva el MP4/HLS sin cifrar.
 - **Reintentos**: las descargas repiten la petición cuando RTVE responde 429/5xx (límite de peticiones)
@@ -159,10 +163,13 @@ filtro **Solo con vídeos**, convierte el filtro *Tipo* en la lista fija de carp
 número de cada carpeta coincida con las filas que aparecen al elegirla. La **1.0.8.0** cambia la biblioteca
 del botón **Crear biblioteca**: en vez de asociar la carpeta raíz, asocia cada subcarpeta de tipo, y si la
 biblioteca ya apuntaba a la raíz la sustituye por las subcarpetas (Jellyfin indexa lo mismo, pero cada tipo
-se puede mover o excluir por separado y los programas no se indexan dos veces).
+se puede mover o excluir por separado y los programas no se indexan dos veces). La **1.1.0.0** deja de
+rechazar la creación de la biblioteca cuando una subcarpeta ya está en otra biblioteca —Jellyfin puede
+indexar la misma carpeta en varias— y añade la tabla **Carpetas y bibliotecas**, que dice qué bibliotecas
+contienen cada subcarpeta y permite añadirla a otra con un desplegable.
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
-publica el tag (`git tag v1.0.8.0; git push origin v1.0.8.0`). El manifiesto y la release se actualizan solos.
+publica el tag (`git tag v1.1.0.0; git push origin v1.1.0.0`). El manifiesto y la release se actualizan solos.
 
 ## Configuración
 
@@ -186,7 +193,8 @@ seleccionar. Recuerda pulsar **Guardar** al terminar.
 | --- | --- | --- |
 | **Carpeta de destino** | *(vacío)* | Ruta absoluta tal y como la ve el servidor. Debe ser una carpeta propia añadida como biblioteca de tipo *Programas de TV* (ver abajo). |
 | **Comprobar carpeta** | — | Comprueba que la carpeta existe y que Jellyfin puede escribir en ella; si falla, propone carpetas escribibles del servidor. |
-| **Crear biblioteca «RTVE Play»** | — | Crea (o reutiliza) una biblioteca de tipo *Programas de TV* con cada subcarpeta de tipo (`peliculas`, `series-de-tv`, `documentales`…) como carpeta, o las añade a la biblioteca «RTVE Play» si ya existía. Si la biblioteca apuntaba a la carpeta raíz, se sustituye por las subcarpetas para que Jellyfin no indexe dos veces los mismos programas. Si la carpeta ya está en una biblioteca de series, no hace nada; si pertenece a una de otro tipo, avisa del conflicto. |
+| **Crear biblioteca «RTVE Play»** | — | Crea (o reutiliza) una biblioteca de tipo *Programas de TV* con cada subcarpeta de tipo (`peliculas`, `series-de-tv`, `documentales`…) como carpeta, o las añade a la biblioteca «RTVE Play» si ya existía. Si la biblioteca apuntaba a la carpeta raíz, se sustituye por las subcarpetas para que Jellyfin no indexe dos veces los mismos programas. Si una subcarpeta ya está en otra biblioteca no pasa nada (Jellyfin indexa una carpeta en todas las bibliotecas que la contienen); solo avisa si el nombre «RTVE Play» lo usa ya una biblioteca de otro tipo. |
+| **Carpetas y bibliotecas…** | — | Abre la tabla de subcarpetas de tipo con las bibliotecas que las contienen y un desplegable para añadir cada una a otra biblioteca. La subcarpeta sigue en «RTVE Play»: para quitarla de una biblioteca se usa **Panel → Bibliotecas**. |
 | **Intervalo de actualización (horas)** | `12` | Periodicidad de la tarea programada (1–168). |
 | **Máximo de vídeos por programa** | `0` | Limita cuántos episodios se replican por programa; `0` = sin límite. |
 | **Preferir MP4 progresivo** | activado | Usa MP4 directo cuando existe (permite *seek*); si no, HLS. |
@@ -241,6 +249,9 @@ Jellyfin. Por eso lo más limpio es darle una carpeta propia y añadirla como **
   asociándole **cada subcarpeta de tipo** (no la carpeta raíz), o se las añade a la biblioteca «RTVE Play»
   si ya existía. Si esa biblioteca apuntaba a la carpeta raíz, el botón la sustituye por las subcarpetas:
   Jellyfin indexa lo mismo, pero así un tipo entero se puede mover a otra biblioteca sin arrastrar el resto.
+- Con **Carpetas y bibliotecas…** puedes añadir una subcarpeta a otra biblioteca del servidor (por ejemplo
+  `programas-de-tv` a «Programes de Televisió») sin quitarla de «RTVE Play»: Jellyfin indexa la misma
+  carpeta en todas las bibliotecas que la tienen, así que el programa aparece en las dos.
 - Jellyfin la indexa igual que cualquier otra biblioteca: carátulas, `tvshow.nfo`, episodios y subtítulos.
 - **Docker**: monta un volumen dedicado (p. ej. `-v /srv/rtve-play:/media/rtve-play`) y escribe en
   *Carpeta de destino* la ruta **del contenedor** (`/media/rtve-play`), no la del host. La ruta debe ser
