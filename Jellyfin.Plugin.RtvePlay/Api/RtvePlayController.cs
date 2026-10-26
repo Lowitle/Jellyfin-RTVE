@@ -127,6 +127,27 @@ public sealed class RtvePlayController : ControllerBase
     }
 
     /// <summary>
+    /// Lists every program of the RTVE catalog in a single response.
+    /// </summary>
+    /// <remarks>
+    /// RTVE pages the catalog at 100 programs per request and offers no server side filter, so the
+    /// configuration page cannot filter or sort the whole catalog with <c>Programs/List</c>. This
+    /// endpoint reads every page and returns the flat list; the page then filters, sorts and pages it
+    /// client side. Radio programs are included and flagged with
+    /// <see cref="RtveProgramSummary.HasVideo"/> = <c>false</c>, as in <c>Programs/List</c>.
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Every program of the catalog.</returns>
+    [HttpGet("Programs/All")]
+    public async Task<ActionResult<IReadOnlyList<RtveProgramSummary>>> ListAllAsync(
+        CancellationToken cancellationToken)
+    {
+        var programs = await _client.ListAllProgramsAsync(cancellationToken).ConfigureAwait(false);
+
+        return Ok(programs);
+    }
+
+    /// <summary>
     /// Checks that the destination folder exists and is writable by the Jellyfin process.
     /// </summary>
     /// <param name="path">Folder to check.</param>

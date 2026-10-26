@@ -1,7 +1,7 @@
 ---
 name: "RTVE Play"
 guid: "3a7f2d61-9c4b-4e0e-b6f5-7d21c8a4e913"
-version: "1.1.0.0"
+version: "1.1.1.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Crea una biblioteca de series con el catálogo a la carta de RTVE Play (.strm + metadatos + subtítulos)."
@@ -17,6 +17,13 @@ owner: "Lowitle"
 artifacts:
   - "Jellyfin.Plugin.RtvePlay.dll"
 changelog: >
+  1.1.1.0: «Ver todos los programas» carga el catálogo entero de RTVE (4640 programas, las 47 páginas de
+  100 que se leen en paralelo) en lugar de una sola página, así que los filtros, los recuentos y el orden
+  se aplican a todo el catálogo y la tabla pinta una ventana de 200 filas para que el navegador no se
+  atragante. Nuevas columnas ordenables «Año» (fecha de producción) y «Última emisión» (fecha de
+  publicación), tomadas de las fechas que publica RTVE. La tabla «Carpetas y bibliotecas» sustituye el
+  desplegable de bibliotecas —que se abría vacío dentro de la tabla con desplazamiento— por un botón
+  «Añadir a…» con la lista de bibliotecas del servidor en línea, e indica cuántas hay y cómo se llaman.
   1.1.0.0: una subcarpeta de tipo que ya está en otra biblioteca de Jellyfin deja de bloquear el botón
   «Crear biblioteca» —Jellyfin puede indexar la misma carpeta en varias bibliotecas— y la biblioteca «RTVE
   Play» se crea igualmente con todas las subcarpetas. Nueva tabla «Carpetas y bibliotecas»: lista cada

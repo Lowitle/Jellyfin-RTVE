@@ -152,6 +152,22 @@ public sealed class RtveProgram
     public string? AgeRating { get; set; }
 
     /// <summary>
+    /// Gets or sets the production date published by RTVE. It is usually the premiere of the
+    /// program, sometimes with a full date and sometimes with a placeholder first of January:
+    /// <c>"01-01-2026 00:00:00"</c>, <c>"28-10-1968 00:00:00"</c>.
+    /// </summary>
+    [JsonPropertyName("productionDate")]
+    public string? ProductionDate { get; set; }
+
+    /// <summary>
+    /// Gets or sets the publication date published by RTVE: the last publication of the program while
+    /// it is on air (today) and a frozen date once it ends, so it is the best proxy for the last
+    /// emission. RTVE formats it as <c>"21-10-2026 00:00:00"</c>.
+    /// </summary>
+    [JsonPropertyName("publicationDate")]
+    public string? PublicationDate { get; set; }
+
+    /// <summary>
     /// Gets or sets the RTVE categories of the program ("Cultura", "Humor", "Información y actualidad"...).
     /// </summary>
     [JsonPropertyName("generos")]

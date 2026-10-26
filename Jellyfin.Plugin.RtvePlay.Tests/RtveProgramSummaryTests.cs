@@ -116,4 +116,78 @@ public class RtveProgramSummaryTests
         Assert.Empty(summary.Genres!);
         Assert.Equal(ProgramSections.OtrosFolder, summary.Section);
     }
+
+    [Fact]
+    public void ToSummary_MapsTheDatesOfTheYearAndLastEmissionColumns()
+    {
+        // Values copied from https://api.rtve.es/api/programas.json: RTVE formats them as
+        // «dd-MM-yyyy HH:mm:ss».
+        var program = new RtveProgram
+        {
+            Id = "1031439",
+            Title = "La cena de los idiotas",
+            ProductionDate = "01-01-2026 00:00:00",
+            PublicationDate = "22-10-2026 10:25:00"
+        };
+
+        var summary = RtveClient.ToSummary(program);
+
+        Assert.Equal(2026, summary.FirstYear);
+        Assert.Equal("2026-10-22", summary.LastEmission);
+    }
+
+    [Fact]
+    public void ToSummary_KeepsTheArchiveYear()
+    {
+        var program = new RtveProgram
+        {
+            Id = "69830",
+            Title = "Cine en el Archivo de RTVE",
+            ProductionDate = "28-10-1968 00:00:00",
+            PublicationDate = "30-09-2026 08:00:00"
+        };
+
+        var summary = RtveClient.ToSummary(program);
+
+        Assert.Equal(1968, summary.FirstYear);
+        Assert.Equal("2026-09-30", summary.LastEmission);
+    }
+
+    [Fact]
+    public void ToSummary_WithoutDates_LeavesTheDateColumnsEmpty()
+    {
+        var summary = RtveClient.ToSummary(new RtveProgram { Id = "42", Title = "Sin fechas" });
+
+        Assert.Null(summary.FirstYear);
+        Assert.Null(summary.LastEmission);
+    }
+
+    [Theory]
+    [InlineData("01-01-2026 00:00:00", 2026)]
+    [InlineData("28-10-1968 00:00:00", 1968)]
+    [InlineData("31-12-1999 23:59:59", 1999)]
+    [InlineData("1999-12-31", 1999)]
+    [InlineData("2026-10-21T09:30:00", 2026)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData(null, null)]
+    [InlineData("sin fecha", null)]
+    [InlineData("31-02-2026 00:00:00", null)]
+    public void ParseYear_ReadsTheFormatsOfTheApi(string? value, int? expected)
+    {
+        Assert.Equal(expected, RtveClient.ParseYear(value));
+    }
+
+    [Theory]
+    [InlineData("21-10-2026 00:00:00", "2026-10-21")]
+    [InlineData("28-10-1968 00:00:00", "1968-10-28")]
+    [InlineData("2026-10-21", "2026-10-21")]
+    [InlineData("2026-10-21T09:30:00", "2026-10-21")]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    [InlineData("21/10/2026", null)]
+    public void ParseIsoDate_NormalizesTheDateToSortItAsText(string? value, string? expected)
+    {
+        Assert.Equal(expected, RtveClient.ParseIsoDate(value));
+    }
 }

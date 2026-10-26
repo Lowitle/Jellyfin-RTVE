@@ -113,6 +113,14 @@ public sealed class RtveSubtitle
 /// same feed and only the television ones have videos to mirror, so the page can hide them without
 /// changing the size of a page of the catalog.
 /// </param>
+/// <param name="FirstYear">
+/// Year of the production date published by RTVE («Año» column), or <c>null</c> when RTVE publishes
+/// no usable date.
+/// </param>
+/// <param name="LastEmission">
+/// Last publication date published by RTVE, normalized to <c>yyyy-MM-dd</c> («Última emisión»
+/// column), or <c>null</c> when RTVE publishes no usable date.
+/// </param>
 public sealed record RtveProgramSummary(
     string Id,
     string Title,
@@ -122,7 +130,9 @@ public sealed record RtveProgramSummary(
     string? ProgramType = null,
     IReadOnlyList<string>? Genres = null,
     string? Section = null,
-    bool HasVideo = true);
+    bool HasVideo = true,
+    int? FirstYear = null,
+    string? LastEmission = null);
 
 /// <summary>
 /// A page of the RTVE program catalog.

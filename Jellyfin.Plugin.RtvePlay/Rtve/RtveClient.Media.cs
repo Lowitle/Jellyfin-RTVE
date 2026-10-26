@@ -10,6 +10,29 @@ namespace Jellyfin.Plugin.RtvePlay.Rtve;
 public sealed partial class RtveClient
 {
     /// <summary>
+    /// Catalog pages requested at the same time when the whole catalog is read. RTVE answers a page
+    /// of 100 programs in a few hundred milliseconds, so four requests keep the load under a couple of
+    /// seconds without hammering the API.
+    /// </summary>
+    private const int CatalogPageConcurrency = 4;
+
+    /// <summary>
+    /// Date formats used by the RTVE API. <c>productionDate</c> and <c>publicationDate</c> arrive as
+    /// <c>"21-10-2026 00:00:00"</c>, but the ISO variants are accepted as well in case RTVE changes
+    /// the format of a program.
+    /// </summary>
+    private static readonly string[] RtveDateFormats =
+    [
+        "dd-MM-yyyy HH:mm:ss",
+        "dd-MM-yyyy HH:mm",
+        "dd-MM-yyyy",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd",
+        "yyyy-MM-ddTHH:mm:ss"
+    ];
+
+    /// <summary>
     /// Gets the available subtitle tracks of a video.
     /// </summary>
     /// <param name="videoId">Video id.</param>
@@ -97,7 +120,49 @@ public sealed partial class RtveClient
             // The same resolution the sync uses to pick the subfolder of the library, so the «Tipo»
             // filter of the page and the folder names of the destination never disagree.
             ProgramSections.FolderName(ProgramSections.Resolve(kind, program.ProgramType, title)),
-            HasVideos(program.HtmlUrl));
+            HasVideos(program.HtmlUrl),
+            ParseYear(program.ProductionDate),
+            ParseIsoDate(program.PublicationDate));
+    }
+
+    /// <summary>
+    /// Reads the year of a date published by RTVE («01-01-2026 00:00:00»).
+    /// </summary>
+    /// <param name="value">Date as published by RTVE.</param>
+    /// <returns>The year, or <c>null</c> when RTVE publishes no usable date.</returns>
+    internal static int? ParseYear(string? value)
+    {
+        return TryParseRtveDate(value, out var date) ? date.Year : null;
+    }
+
+    /// <summary>
+    /// Normalizes a date published by RTVE to <c>yyyy-MM-dd</c>, the format that sorts
+    /// chronologically as plain text.
+    /// </summary>
+    /// <param name="value">Date as published by RTVE.</param>
+    /// <returns>The date, or <c>null</c> when RTVE publishes no usable date.</returns>
+    internal static string? ParseIsoDate(string? value)
+    {
+        return TryParseRtveDate(value, out var date)
+            ? date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : null;
+    }
+
+    private static bool TryParseRtveDate(string? value, out DateTime date)
+    {
+        date = default;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return DateTime.TryParseExact(
+            value.Trim(),
+            RtveDateFormats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out date);
     }
 
     /// <summary>
@@ -202,11 +267,7 @@ public sealed partial class RtveClient
                 hasMore);
         }
 
-        var url = string.Format(
-            CultureInfo.InvariantCulture,
-            "https://api.rtve.es/api/programas.json?page={0}&size={1}",
-            currentPage,
-            pageSize);
+        var url = CatalogPageUrl(currentPage, pageSize);
 
         var envelope = await GetJsonAsync<RtveEnvelope<RtveProgram>>(url, cancellationToken).ConfigureAwait(false);
         var resultPage = envelope?.Page;
@@ -224,6 +285,85 @@ public sealed partial class RtveClient
             totalPages,
             resultPage?.Total ?? programs.Count,
             currentPage < totalPages);
+    }
+
+    /// <summary>
+    /// Reads the whole program catalog of RTVE, page by page.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Every program of the catalog, radio included, in the order RTVE publishes them.</returns>
+    /// <remarks>
+    /// RTVE caps a page of the catalog at <see cref="PageSize"/> programs and offers no way to filter
+    /// by type, genre or date, so a page of the API is never enough to sort or filter the catalog as a
+    /// whole. The first page tells how many pages there are; the rest are requested a few at a time and
+    /// flattened here. A page that RTVE does not answer is skipped (the failure is already logged by
+    /// <see cref="GetJsonAsync{T}"/>), so a hiccup in one page does not throw away the other 46.
+    /// </remarks>
+    public async Task<IReadOnlyList<RtveProgramSummary>> ListAllProgramsAsync(CancellationToken cancellationToken)
+    {
+        var firstEnvelope = await GetJsonAsync<RtveEnvelope<RtveProgram>>(
+            CatalogPageUrl(1),
+            cancellationToken).ConfigureAwait(false);
+
+        var firstPage = firstEnvelope?.Page;
+        if (firstPage is null)
+        {
+            return [];
+        }
+
+        var programs = new List<RtveProgram>(firstPage.Total);
+        programs.AddRange(firstPage.Items ?? []);
+
+        var totalPages = Math.Max(1, firstPage.TotalPages);
+        if (totalPages > 1)
+        {
+            var remaining = new List<RtveProgram>?[totalPages - 1];
+            using var gate = new SemaphoreSlim(CatalogPageConcurrency);
+
+            var requests = Enumerable.Range(2, totalPages - 1).Select(async page =>
+            {
+                await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    var envelope = await GetJsonAsync<RtveEnvelope<RtveProgram>>(
+                        CatalogPageUrl(page),
+                        cancellationToken).ConfigureAwait(false);
+
+                    remaining[page - 2] = envelope?.Page?.Items;
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            });
+
+            await Task.WhenAll(requests).ConfigureAwait(false);
+
+            // The order of the response is the order of RTVE, page by page: a program that appears in
+            // two pages (the catalog moves while it is read) is listed once.
+            foreach (var page in remaining)
+            {
+                if (page is not null)
+                {
+                    programs.AddRange(page);
+                }
+            }
+        }
+
+        return programs
+            .Where(program => program.Id is not null)
+            .DistinctBy(program => program.Id)
+            .Select(ToSummary)
+            .ToList();
+    }
+
+    private static string CatalogPageUrl(int page, int size = PageSize)
+    {
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "https://api.rtve.es/api/programas.json?page={0}&size={1}",
+            page,
+            size);
     }
 
     /// <summary>

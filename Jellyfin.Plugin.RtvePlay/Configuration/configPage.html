@@ -112,6 +112,20 @@
                 width: 10em;
             }
 
+            #RtvePlayConfigPage .rtveTable .rtveCellYear,
+            #RtvePlayConfigPage .rtveTable .rtveCellDate {
+                white-space: nowrap;
+                font-variant-numeric: tabular-nums;
+            }
+
+            #RtvePlayConfigPage .rtveTable .rtveCellYear {
+                width: 4.5em;
+            }
+
+            #RtvePlayConfigPage .rtveTable .rtveCellDate {
+                width: 7em;
+            }
+
             #RtvePlayConfigPage .rtveCellType {
                 font-size: 0.85em;
             }
@@ -178,8 +192,27 @@
                 text-decoration: underline;
             }
 
-            #RtvePlayConfigPage .rtveLibrarySelect {
+            /* The libraries of a row are unfolded under it instead of inside a native <select>: a
+               combo inside the scrollable table opened its popup empty in some browsers. */
+            #RtvePlayConfigPage .rtveLibraryChooser {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.3em;
                 min-width: 12em;
+            }
+
+            #RtvePlayConfigPage .rtveLibraryList {
+                display: none;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.2em;
+                width: 100%;
+            }
+
+            #RtvePlayConfigPage .rtveLibraryOption {
+                text-align: left;
+                text-transform: none;
             }
         </style>
 
@@ -437,6 +470,13 @@
                     hasMore: false,
                     query: '',
                     pageSize: 100,
+                    // With «Ver todos los programas» the whole catalog (4640 entries) is loaded and
+                    // filtered, sorted and paged here, in the browser: the table only renders a
+                    // window of rows, because 4640 <tr> would make the page crawl.
+                    all: false,
+                    windowSize: 200,
+                    visibleCount: 0,
+                    pageItems: null,
                     selected: {},
                     // Table state: it survives the re-renders, so filtering or sorting never loses
                     // the programs already ticked.
@@ -451,6 +491,7 @@
                     selectAll: null,
                     addButton: null,
                     countLabel: null,
+                    pager: null,
                     body: null
                 }
             };
@@ -749,6 +790,24 @@
                 return genres.map(rtveClean).filter(function (genre) { return genre.length > 0; });
             }
 
+            // «Año»: the server sends the year of the production date of the program (the premiere
+            // for most of the catalog) as a number, or nothing when RTVE publishes no date.
+            function rtveCatalogYear(item) {
+                var year = parseInt(rtveClean(rtveField(item, 'firstYear')), 10);
+                return isNaN(year) ? '' : String(year);
+            }
+
+            // «Última emisión»: the server normalizes the publication date to yyyy-MM-dd, which sorts
+            // chronologically as plain text. It is shown as dd/MM/yyyy, the format of rtve.es.
+            function rtveCatalogLastEmission(item) {
+                return rtveClean(rtveField(item, 'lastEmission'));
+            }
+
+            function rtveDisplayDate(value) {
+                var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+                return match ? match[3] + '/' + match[2] + '/' + match[1] : (value || '');
+            }
+
             function rtveCatalogSortValue(item, key) {
                 switch (key) {
                     case 'id':
@@ -757,6 +816,10 @@
                         return rtveCatalogSectionLabel(item) || rtveCatalogKind(item);
                     case 'genre':
                         return rtveCatalogGenres(item).join(', ');
+                    case 'year':
+                        return rtveCatalogYear(item);
+                    case 'lastEmission':
+                        return rtveCatalogLastEmission(item);
                     default:
                         return rtveCatalogTitle(item);
                 }
@@ -766,12 +829,45 @@
                 var catalog = RtvePlayConfig.catalog;
                 var first = rtveCatalogSortValue(left, catalog.sort);
                 var second = rtveCatalogSortValue(right, catalog.sort);
+                var fallback = function () {
+                    return rtveCatalogTitle(left)
+                        .localeCompare(rtveCatalogTitle(right), 'es', { sensitivity: 'base' }) * catalog.dir;
+                };
 
                 if (catalog.sort === 'id') {
                     var firstNumber = parseInt(first, 10);
                     var secondNumber = parseInt(second, 10);
                     if (!isNaN(firstNumber) && !isNaN(secondNumber) && firstNumber !== secondNumber) {
                         return (firstNumber - secondNumber) * catalog.dir;
+                    }
+                }
+
+                // The year is a number stored as text and many programs have none: «2014» has to be
+                // ordered as a number and the programs without a year always go last, whatever the
+                // direction of the sort.
+                if (catalog.sort === 'year') {
+                    var firstYear = parseInt(first, 10);
+                    var secondYear = parseInt(second, 10);
+                    var firstHas = !isNaN(firstYear);
+                    var secondHas = !isNaN(secondYear);
+
+                    if (firstHas !== secondHas) {
+                        return firstHas ? -1 : 1;
+                    }
+                    if (firstHas && firstYear !== secondYear) {
+                        return (firstYear - secondYear) * catalog.dir;
+                    }
+                    return fallback();
+                }
+
+                // The date is yyyy-MM-dd, so text order is date order; the programs without a date
+                // go last as well.
+                if (catalog.sort === 'lastEmission') {
+                    if ((first === '') !== (second === '')) {
+                        return first === '' ? 1 : -1;
+                    }
+                    if (first === second) {
+                        return fallback();
                     }
                 }
 
@@ -783,9 +879,9 @@
                 return result * catalog.dir;
             }
 
-            // The filters work on the programs of the loaded page: the RTVE API pages the catalog
-            // server side and every page holds the same number of programs, so filtering only hides
-            // rows of the page instead of changing how many programs it has.
+            // Every program that passes the filters, sorted. With a search this is the page that RTVE
+            // returned; with «Ver todos los programas» it is the whole catalog, which is why the table
+            // only renders a window of this list (see rtveCatalogPageItems).
             function rtveCatalogVisibleItems() {
                 var catalog = RtvePlayConfig.catalog;
                 var text = rtveFold(catalog.filter);
@@ -814,7 +910,8 @@
                         rtveCatalogSectionLabel(item),
                         rtveCatalogKind(item),
                         rtveCatalogType(item),
-                        rtveCatalogGenres(item).join(' ')
+                        rtveCatalogGenres(item).join(' '),
+                        rtveCatalogYear(item)
                     ].join(' ');
 
                     return rtveFold(haystack).indexOf(text) >= 0;
@@ -822,6 +919,30 @@
 
                 items.sort(rtveCatalogCompare);
                 return items;
+            }
+
+            // The rows of the table: a search already comes paged and RTVE paged it server side, while
+            // the whole catalog is paged here. The page is clamped, so filtering a 4640 program catalog
+            // down to 3 rows from the page 20 shows those 3 rows instead of an empty table.
+            function rtveCatalogPageItems() {
+                var catalog = RtvePlayConfig.catalog;
+                var items = rtveCatalogVisibleItems();
+                catalog.visibleCount = items.length;
+
+                if (!catalog.all) {
+                    return items;
+                }
+
+                var size = Math.max(1, catalog.windowSize);
+                var pages = Math.max(1, Math.ceil(items.length / size));
+                var page = Math.min(Math.max(1, catalog.page), pages);
+
+                catalog.page = page;
+                catalog.totalPages = pages;
+                catalog.hasMore = page < pages;
+
+                var start = (page - 1) * size;
+                return items.slice(start, start + size);
             }
 
             function rtveCatalogValues(selector) {
@@ -894,8 +1015,9 @@
                 return select;
             }
 
-            // The sections are always listed, with the number of programs of the loaded page that
-            // «Solo con vídeos» would show, so «Películas» is in the combo even when the page has none.
+            // The sections are always listed, with the number of programs loaded that «Solo con vídeos»
+            // would show —the whole catalog after «Ver todos los programas», one RTVE page after a
+            // search—, so «Películas» is in the combo even when there is none.
             function rtveCatalogSectionOptions() {
                 var catalog = RtvePlayConfig.catalog;
                 var items = catalog.items.filter(function (item) {
@@ -918,7 +1040,7 @@
                 var text = rtveElement('input', 'emby-input rtveFilterText');
                 text.id = 'RtveCatalogFilterText';
                 text.type = 'text';
-                text.placeholder = 'Título, id, tipo o género';
+                text.placeholder = 'Título, id, tipo, género o año';
                 text.value = catalog.filter;
                 text.addEventListener('input', function () {
                     catalog.filter = this.value;
@@ -1043,7 +1165,9 @@
                 checkbox.title = 'Seleccionar los programas visibles';
                 checkbox.addEventListener('change', function () {
                     var value = this.checked;
-                    rtveCatalogVisibleItems().forEach(function (item) {
+                    // Only the rows of the current window are ticked: with the whole catalog loaded,
+                    // selecting 4640 programs by accident would write 4640 entries in the configuration.
+                    (catalog.pageItems || rtveCatalogPageItems()).forEach(function (item) {
                         var itemId = rtveCatalogId(item);
                         if (rtveCatalogHasVideo(item) && !rtveCatalogIsAdded(itemId)) {
                             catalog.selected[itemId] = value;
@@ -1121,6 +1245,17 @@
                     'rtveCellGenres' + (genres.length ? '' : ' rtveMuted'),
                     genres.length ? genres.join(', ') : '—'));
 
+                // The year and the last emission come from the dates RTVE publishes for the program;
+                // not every program has them, so an empty cell is shown instead of a wrong date.
+                var year = rtveCatalogYear(item);
+                row.appendChild(rtveElement('td', 'rtveCellYear' + (year ? '' : ' rtveMuted'), year || '—'));
+
+                var lastEmission = rtveCatalogLastEmission(item);
+                row.appendChild(rtveElement(
+                    'td',
+                    'rtveCellDate' + (lastEmission ? '' : ' rtveMuted'),
+                    lastEmission ? rtveDisplayDate(lastEmission) : '—'));
+
                 return row;
             }
 
@@ -1131,10 +1266,16 @@
                 }
 
                 catalog.body.innerHTML = '';
-                var items = rtveCatalogVisibleItems();
+
+                // The rows of the current window are kept: the selection handlers reuse them until a
+                // filter or the pager asks for another set of rows.
+                catalog.pageItems = rtveCatalogPageItems();
+                var items = catalog.pageItems;
 
                 if (items.length === 0) {
-                    var emptyText = 'Ningún programa de esta página coincide con los filtros.';
+                    var emptyText = catalog.all
+                        ? 'Ningún programa del catálogo coincide con los filtros.'
+                        : 'Ningún programa de esta página coincide con los filtros.';
                     if (catalog.onlyVideo && catalog.items.some(function (item) {
                         return !rtveCatalogHasVideo(item);
                     })) {
@@ -1143,7 +1284,7 @@
 
                     var emptyRow = rtveElement('tr');
                     var emptyCell = rtveElement('td', 'rtveTableEmpty rtveMuted', emptyText);
-                    emptyCell.colSpan = 5;
+                    emptyCell.colSpan = 7;
                     emptyRow.appendChild(emptyCell);
                     catalog.body.appendChild(emptyRow);
                 } else {
@@ -1153,11 +1294,12 @@
                 }
 
                 rtveUpdateCatalogSelection();
+                rtveUpdatePager();
             }
 
             function rtveUpdateCatalogSelection() {
                 var catalog = RtvePlayConfig.catalog;
-                var visible = rtveCatalogVisibleItems();
+                var visible = catalog.pageItems || rtveCatalogPageItems();
                 var selectableVisible = visible.filter(function (item) {
                     return rtveCatalogHasVideo(item) && !rtveCatalogIsAdded(rtveCatalogId(item));
                 });
@@ -1165,8 +1307,8 @@
                     return catalog.selected[rtveCatalogId(item)] === true;
                 }).length;
 
-                // The selection survives filtering, so the counters and the button work on every
-                // ticked row of the page, not only on the rows that are visible right now.
+                // The selection survives filtering and paging, so the counters and the button work on
+                // every ticked row of the catalog, not only on the rows that are visible right now.
                 var selected = catalog.items.filter(function (item) {
                     var itemId = rtveCatalogId(item);
                     return catalog.selected[itemId] === true
@@ -1188,8 +1330,14 @@
                 }
 
                 if (catalog.countLabel) {
-                    var count = 'Mostrando ' + visible.length + ' de ' + catalog.items.length
-                        + ' programas de esta página';
+                    var count;
+                    if (catalog.all) {
+                        count = 'Mostrando ' + visible.length + ' de ' + catalog.visibleCount
+                            + ' programas filtrados de ' + catalog.items.length + ' del catálogo';
+                    } else {
+                        count = 'Mostrando ' + visible.length + ' de ' + catalog.items.length
+                            + ' programas de esta página';
+                    }
                     if (selected > 0) {
                         count += ' · ' + selected + ' seleccionado' + (selected === 1 ? '' : 's');
                     }
@@ -1197,6 +1345,8 @@
                 }
             }
 
+            // With a search RTVE pages the catalog server side and the pager asks for another page; with
+            // the whole catalog loaded the pager only moves the window of rows.
             function rtveCatalogPager() {
                 var catalog = RtvePlayConfig.catalog;
                 var pager = rtveElement('div', 'rtveCatalogPager');
@@ -1205,33 +1355,67 @@
                 previous.type = 'button';
                 previous.disabled = catalog.page <= 1;
                 previous.addEventListener('click', function () {
+                    if (catalog.all) {
+                        catalog.page = Math.max(1, catalog.page - 1);
+                        rtveRenderCatalogRows();
+                        return;
+                    }
                     rtveLoadCatalog(catalog.query, catalog.page - 1);
                 });
                 pager.appendChild(previous);
 
-                pager.appendChild(rtveElement(
+                var text = rtveElement(
                     'span',
                     'rtvePagerText',
-                    'Página ' + catalog.page + ' de ' + catalog.totalPages));
+                    'Página ' + catalog.page + ' de ' + catalog.totalPages);
+                pager.appendChild(text);
 
                 var next = rtveElement('button', 'emby-button raised rtvePagerButton', 'Siguiente');
                 next.type = 'button';
                 next.disabled = !catalog.hasMore;
                 next.addEventListener('click', function () {
+                    if (catalog.all) {
+                        catalog.page = catalog.page + 1;
+                        rtveRenderCatalogRows();
+                        return;
+                    }
                     rtveLoadCatalog(catalog.query, catalog.page + 1);
                 });
                 pager.appendChild(next);
 
+                // The filters and the window are resolved after the pager is built (rtveRenderCatalogRows),
+                // so the labels are refreshed from there instead of being fixed here.
+                catalog.pager = { previous: previous, text: text, next: next };
                 return pager;
             }
 
-            // RTVE pages the catalog server side, so a page always holds the same number of programs and
-            // the filters only hide rows of the loaded page. The radio programs are part of the same
-            // catalog: the «Solo con vídeos» filter is the one that hides them.
+            function rtveUpdatePager() {
+                var catalog = RtvePlayConfig.catalog;
+                if (!catalog.pager) {
+                    return;
+                }
+
+                catalog.pager.text.textContent = 'Página ' + catalog.page + ' de ' + catalog.totalPages;
+                catalog.pager.previous.disabled = catalog.page <= 1;
+                catalog.pager.next.disabled = !catalog.hasMore;
+            }
+
+            // RTVE pages the catalog server side and offers no filter, so a search always holds the same
+            // number of programs per page and the filters only hide rows of the loaded page. With «Ver
+            // todos los programas» the whole catalog is loaded instead and the filters apply to every
+            // program of RTVE. The radio programs are part of the same catalog: «Solo con vídeos» is the
+            // filter that hides them.
             function rtveCatalogCaption() {
                 var catalog = RtvePlayConfig.catalog;
-                var caption = catalog.items.length + ' programas en esta página'
-                    + ' · los filtros se aplican a la página cargada';
+                var caption;
+
+                if (catalog.all) {
+                    caption = catalog.items.length + ' programas cargados del catálogo de RTVE'
+                        + ' · los filtros y el orden se aplican a todo el catálogo';
+                } else {
+                    caption = catalog.items.length + ' programas en esta página'
+                        + ' · los filtros se aplican a la página cargada';
+                }
 
                 if (catalog.onlyVideo) {
                     caption += ' · ocultos los programas de radio';
@@ -1241,15 +1425,21 @@
                     return caption + ' · búsqueda «' + catalog.query + '»';
                 }
 
+                if (catalog.all) {
+                    return caption;
+                }
+
                 return caption + ' · RTVE mezcla radio y televisión en el catálogo (' + catalog.totalItems
                     + ' entradas)';
             }
 
             function rtveLoadCatalog(query, page) {
                 var catalog = RtvePlayConfig.catalog;
+                catalog.all = false;
                 catalog.query = query || '';
                 catalog.page = page || 1;
                 catalog.selected = {};
+                catalog.pageItems = null;
 
                 Dashboard.showLoadingMsg();
                 ApiClient.getJSON(rtveUrl('Programs/List', {
@@ -1277,6 +1467,43 @@
                 });
             }
 
+            // RTVE pages the catalog server side at 100 programs per request, so filtering the whole
+            // catalog is impossible with Programs/List. Programs/All reads every page and returns the
+            // 4640 programs at once; from there the filtering, the sorting and the pager work here.
+            function rtveLoadAllPrograms() {
+                var catalog = RtvePlayConfig.catalog;
+                catalog.all = true;
+                catalog.query = '';
+                catalog.page = 1;
+                catalog.selected = {};
+                catalog.pageItems = null;
+                catalog.totalPages = 1;
+                catalog.hasMore = false;
+
+                Dashboard.showLoadingMsg();
+                rtveStatus('Leyendo el catálogo completo de RTVE (unas 47 páginas)… puede tardar unos segundos.');
+
+                ApiClient.getJSON(rtveUrl('Programs/All')).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    catalog.items = Array.isArray(result) ? result : (rtveField(result, 'items') || []);
+                    catalog.page = 1;
+                    catalog.totalItems = catalog.items.length;
+
+                    if (catalog.items.length === 0) {
+                        rtveStatus('RTVE no ha devuelto ningún programa. Prueba con «Buscar por título».');
+                    } else {
+                        rtveStatus('Catálogo completo cargado: ' + catalog.items.length
+                            + ' programas. Filtra, ordena y elige los que quieras añadir.');
+                    }
+
+                    rtveRenderCatalog();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    catalog.all = false;
+                    rtveStatus('No se pudo leer el catálogo completo de RTVE. Prueba con «Buscar por título».');
+                });
+            }
+
             function rtveRenderCatalog() {
                 var container = document.querySelector('#RtveCatalog');
                 var catalog = RtvePlayConfig.catalog;
@@ -1285,6 +1512,7 @@
                 catalog.selectAll = null;
                 catalog.addButton = null;
                 catalog.countLabel = null;
+                catalog.pager = null;
                 catalog.body = null;
 
                 if (!catalog.items.length) {
@@ -1323,6 +1551,8 @@
                 headRow.appendChild(rtveSortableHeader('Id', 'id'));
                 headRow.appendChild(rtveSortableHeader('Tipo', 'section'));
                 headRow.appendChild(rtveSortableHeader('Género', 'genre'));
+                headRow.appendChild(rtveSortableHeader('Año', 'year'));
+                headRow.appendChild(rtveSortableHeader('Última emisión', 'lastEmission'));
                 head.appendChild(headRow);
                 table.appendChild(head);
 
@@ -1417,7 +1647,7 @@
 
             function rtveListPrograms() {
                 document.querySelector('#RtveProgramInput').value = '';
-                rtveLoadCatalog('', 1);
+                rtveLoadAllPrograms();
             }
 
             function rtveCheckPath() {
@@ -1591,6 +1821,20 @@
                     panel.appendChild(rtveElement('div', 'fieldDescription', RtvePlayConfig.libraryMessage));
                 }
 
+                // The libraries of the server are counted here so an empty chooser is never a mystery:
+                // either Jellyfin has no libraries or the row simply has no other library to offer.
+                var libraryNames = libraries
+                    .map(function (library) { return rtveField(library, 'name'); })
+                    .filter(function (name) { return !!name; });
+
+                panel.appendChild(rtveElement(
+                    'div',
+                    libraryNames.length > 0 ? 'fieldDescription' : 'fieldDescription rtveWarning',
+                    libraryNames.length > 0
+                        ? 'Bibliotecas del servidor (' + libraryNames.length + '): '
+                            + libraryNames.join(', ') + '.'
+                        : 'El servidor no tiene ninguna biblioteca de la que elegir.'));
+
                 var wrap = rtveElement('div', 'rtveTableWrap');
                 var table = rtveElement('table', 'rtveTable');
                 var head = rtveElement('thead');
@@ -1639,38 +1883,58 @@
                     owners.length > 0 ? '' : 'rtveMuted',
                     owners.length > 0 ? owners.join(' · ') : '—'));
 
-                var cell = rtveElement('td');
-                var select = rtveElement('select', 'rtveSelect rtveLibrarySelect');
-                var placeholder = rtveElement(
-                    'option',
-                    '',
-                    libraries.length > 0 ? 'Elegir biblioteca…' : 'No hay más bibliotecas');
-                placeholder.value = '';
-                select.appendChild(placeholder);
-
-                libraries.forEach(function (library) {
-                    var libraryName = rtveField(library, 'name');
-                    if (!libraryName) {
-                        return;
-                    }
-                    var option = rtveElement(
-                        'option',
-                        '',
-                        libraryName + ' (' + (rtveField(library, 'type') || 'sin tipo') + ')');
-                    option.value = libraryName;
-                    select.appendChild(option);
-                });
-
-                select.disabled = libraries.length === 0;
-                select.addEventListener('change', function () {
-                    if (this.value) {
-                        rtveAssociateLibraryFolder(path, this.value, this);
-                    }
-                });
-                cell.appendChild(select);
+                var cell = rtveElement('td', 'rtveCellLibrary');
+                cell.appendChild(rtveLibraryChooser(path, libraries));
                 row.appendChild(cell);
 
                 return row;
+            }
+
+            // A native <select> inside the scrollable table opened its popup empty in some browsers, so
+            // the libraries are listed as buttons that unfold under the row. The list is built from the
+            // same data, so nothing changes in the server side of the association.
+            function rtveLibraryChooser(folderPath, libraries) {
+                var chooser = rtveElement('div', 'rtveLibraryChooser');
+                var names = libraries.filter(function (library) {
+                    return !!rtveField(library, 'name');
+                });
+
+                var button = rtveElement(
+                    'button',
+                    'emby-button raised rtveLibraryButton',
+                    names.length > 0 ? 'Añadir a…' : 'No hay bibliotecas');
+                button.type = 'button';
+                button.disabled = names.length === 0;
+                chooser.appendChild(button);
+
+                if (names.length === 0) {
+                    return chooser;
+                }
+
+                var list = rtveElement('div', 'rtveLibraryList');
+                names.forEach(function (library) {
+                    var libraryName = rtveField(library, 'name');
+                    var type = rtveField(library, 'type') || 'sin tipo';
+                    var option = rtveElement('button', 'emby-button rtveLibraryOption', libraryName + ' · ' + type);
+                    option.type = 'button';
+                    option.addEventListener('click', function () {
+                        rtveAssociateLibraryFolder(folderPath, libraryName, null);
+                    });
+                    list.appendChild(option);
+                });
+                chooser.appendChild(list);
+
+                // An explicit flag instead of reading back style.display: the initial value is the one
+                // of the stylesheet, not an inline style, so a browser may report it in several ways.
+                var expanded = false;
+                button.setAttribute('aria-expanded', 'false');
+                button.addEventListener('click', function () {
+                    expanded = !expanded;
+                    list.style.display = expanded ? 'flex' : 'none';
+                    button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                });
+
+                return chooser;
             }
 
             function rtveAssociateLibraryFolder(folder, library, select) {

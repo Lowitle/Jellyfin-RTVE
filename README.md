@@ -166,10 +166,15 @@ biblioteca ya apuntaba a la raíz la sustituye por las subcarpetas (Jellyfin ind
 se puede mover o excluir por separado y los programas no se indexan dos veces). La **1.1.0.0** deja de
 rechazar la creación de la biblioteca cuando una subcarpeta ya está en otra biblioteca —Jellyfin puede
 indexar la misma carpeta en varias— y añade la tabla **Carpetas y bibliotecas**, que dice qué bibliotecas
-contienen cada subcarpeta y permite añadirla a otra con un desplegable.
+contienen cada subcarpeta y permite añadirla a otra con un desplegable. La **1.1.1.0** hace que **Ver
+todos los programas** cargue el catálogo entero de RTVE (4640 programas, no una página), de modo que los
+filtros, los recuentos y el orden se aplican a todo el catálogo —la tabla pinta una ventana de 200 filas—,
+añade las columnas ordenables **Año** y **Última emisión** a partir de las fechas que publica RTVE y
+sustituye el desplegable de bibliotecas de la tabla **Carpetas y bibliotecas** —que se abría vacío dentro
+de la tabla con desplazamiento— por un botón **Añadir a…** con la lista de bibliotecas en línea.
 
 Para una versión nueva: sube `Version` en `Directory.Build.props` y `version` en `build.yaml`, haz commit y
-publica el tag (`git tag v1.1.0.0; git push origin v1.1.0.0`). El manifiesto y la release se actualizan solos.
+publica el tag (`git tag v1.1.1.0; git push origin v1.1.1.0`). El manifiesto y la release se actualizan solos.
 
 ## Configuración
 
@@ -182,7 +187,7 @@ La página del plugin está en **Panel de control → Plugins → RTVE Play**.
 | **Id, slug o URL del programa** | Acepta `111570`, `saber-vivir` o `https://www.rtve.es/play/videos/saber-vivir/`. |
 | **Añadir programa** | Resuelve la referencia contra la API de RTVE y la guarda con su título. |
 | **Buscar por título** | Filtra el catálogo por ese texto en el panel del listado (se incluyen los programas de radio, que aparecen marcados y sin casilla para añadirlos). |
-| **Ver todos los programas** | Muestra el catálogo completo **paginado** en una tabla (*Nombre*, *Id*, *Tipo*, *Género*) con cabeceras para ordenar y filtros por texto, tipo (las mismas carpetas de la biblioteca), género y **Solo con vídeos**. Cada página trae los mismos 100 programas que devuelve RTVE y los filtros solo ocultan filas de la página cargada. Marca las casillas y pulsa **Añadir seleccionados**; *Anterior* / *Siguiente* cambian de página y «Ocultar los ya añadidos» deja fuera los que ya están en la lista. |
+| **Ver todos los programas** | Muestra **todo el catálogo** de RTVE (4640 programas: la página carga las 47 páginas de 100 que devuelve la API, unos segundos) en una tabla (*Nombre*, *Id*, *Tipo*, *Género*, *Año*, *Última emisión*) con cabeceras para ordenar y filtros por texto, tipo (las mismas carpetas de la biblioteca), género y **Solo con vídeos**. Al estar cargado el catálogo entero, los filtros, los recuentos y el orden se aplican a **todos** los programas y no solo a los de la página visible; la tabla pinta una ventana de 200 filas para que el navegador no se atragante y *Anterior* / *Siguiente* recorren el resultado filtrado. *Año* es el año de producción del programa y *Última emisión* su fecha de publicación (ambas se pueden ordenar; los programas sin fecha quedan al final). Marca las casillas y pulsa **Añadir seleccionados**; «Ocultar los ya añadidos» deja fuera los que ya están en la lista. |
 
 Los programas ya añadidos aparecen marcados en el listado como *ya añadido* y no se pueden volver a
 seleccionar. Recuerda pulsar **Guardar** al terminar.
@@ -194,7 +199,7 @@ seleccionar. Recuerda pulsar **Guardar** al terminar.
 | **Carpeta de destino** | *(vacío)* | Ruta absoluta tal y como la ve el servidor. Debe ser una carpeta propia añadida como biblioteca de tipo *Programas de TV* (ver abajo). |
 | **Comprobar carpeta** | — | Comprueba que la carpeta existe y que Jellyfin puede escribir en ella; si falla, propone carpetas escribibles del servidor. |
 | **Crear biblioteca «RTVE Play»** | — | Crea (o reutiliza) una biblioteca de tipo *Programas de TV* con cada subcarpeta de tipo (`peliculas`, `series-de-tv`, `documentales`…) como carpeta, o las añade a la biblioteca «RTVE Play» si ya existía. Si la biblioteca apuntaba a la carpeta raíz, se sustituye por las subcarpetas para que Jellyfin no indexe dos veces los mismos programas. Si una subcarpeta ya está en otra biblioteca no pasa nada (Jellyfin indexa una carpeta en todas las bibliotecas que la contienen); solo avisa si el nombre «RTVE Play» lo usa ya una biblioteca de otro tipo. |
-| **Carpetas y bibliotecas…** | — | Abre la tabla de subcarpetas de tipo con las bibliotecas que las contienen y un desplegable para añadir cada una a otra biblioteca. La subcarpeta sigue en «RTVE Play»: para quitarla de una biblioteca se usa **Panel → Bibliotecas**. |
+| **Carpetas y bibliotecas…** | — | Abre la tabla de subcarpetas de tipo con las bibliotecas que las contienen y un botón **Añadir a…** que despliega la lista de bibliotecas del servidor para añadir cada una a otra biblioteca (también indica cuántas hay y cómo se llaman). La subcarpeta sigue en «RTVE Play»: para quitarla de una biblioteca se usa **Panel → Bibliotecas**. |
 | **Intervalo de actualización (horas)** | `12` | Periodicidad de la tarea programada (1–168). |
 | **Máximo de vídeos por programa** | `0` | Limita cuántos episodios se replican por programa; `0` = sin límite. |
 | **Preferir MP4 progresivo** | activado | Usa MP4 directo cuando existe (permite *seek*); si no, HLS. |
