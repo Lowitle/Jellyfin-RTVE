@@ -9,7 +9,7 @@
   "versions": [
     {
       "version": "1.1.1.0",
-      "changelog": "RTVE Play 1.1.1.0",
+      "changelog": "Ver todos los programas carga el catalogo entero de RTVE (47 paginas de 100, 4640 programas) con el nuevo endpoint Programs/All, en paralelo y sin abortar si una pagina falla, asi que los filtros por texto, tipo, genero y solo con videos, los recuentos, el orden y el buscador se aplican a todos los programas y no solo a la pagina visible; la tabla pinta una ventana de 200 filas y Anterior/Siguiente recorren el resultado filtrado. La tabla anade las columnas ordenables Ano, con la fecha de produccion, y Ultima emision, con la de publicacion, y deja al final los programas sin fecha. En Carpetas y bibliotecas el desplegable de bibliotecas, que se abria vacio dentro de la tabla con desplazamiento, pasa a ser un boton Anadir a con la lista de bibliotecas en linea.",
       "targetAbi": "10.11.0.0",
       "sourceUrl": "https://github.com/Lowitle/Jellyfin-RTVE/releases/download/v1.1.1.0/rtveplay_1.1.1.0.zip",
       "checksum": "679DF230452482BC6A4DAD60A0047A0C",
